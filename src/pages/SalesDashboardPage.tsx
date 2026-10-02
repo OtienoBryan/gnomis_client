@@ -328,6 +328,7 @@ const SalesDashboardPage: React.FC = () => {
         //{ to: '/shared-performance', label: 'Sales Rep Performance', icon: <TrendingUpIcon className="h-4 w-4" />, color: 'bg-white text-rose-700 border-gray-300 hover:bg-rose-50' },
         { to: '/overall-attendance', label: 'Sales Rep Attendance Report', icon: <BarChart3Icon className="h-4 w-4" />, color: 'bg-white text-violet-700 border-gray-300 hover:bg-violet-50' },
         //{ to: '/dashboard/reports/product-performance', label: 'Product Perf.', icon: <PieChartIcon className="h-4 w-4" />, color: 'bg-white text-cyan-700 border-gray-300 hover:bg-cyan-50' },
+        { to: '/van-sales', label: 'Van Sales', icon: <ShoppingCartIcon className="h-4 w-4" />, color: 'bg-white text-green-700 border-gray-300 hover:bg-green-50' },
         { to: '/financial/customer-orders', label: 'Orders Report', icon: <FileTextIcon className="h-4 w-4" />, color: 'bg-white text-red-700 border-gray-300 hover:bg-red-50', badge: newOrdersCount },
         { to: '/returns', label: 'Product Returns', icon: <RotateCcwIcon className="h-4 w-4" />, color: 'bg-white text-orange-700 border-gray-300 hover:bg-orange-50' },
         { to: '/non-supplies', label: 'Non Supplies', icon: <RotateCcwIcon className="h-4 w-4" />, color: 'bg-white text-red-700 border-gray-300 hover:bg-red-50' },

@@ -8,6 +8,7 @@ interface Store {
   store_name: string;
   store_code: string;
   store_type?: string;
+  assigned_staff_id?: number | null;
   location?: string;
   address?: string;
   is_active?: boolean | number;
@@ -22,10 +23,16 @@ const STORE_TYPES = [
 
 const typeLabel = (type?: string) => STORE_TYPES.find(t => t.value === type)?.label || 'Storage';
 
+interface SalesStaff {
+  id: number;
+  name: string;
+}
+
 const emptyForm = {
   store_name: '',
   store_code: '',
   store_type: 'storage',
+  assigned_staff_id: '' as string,
   location: '',
   address: '',
 };
@@ -36,6 +43,7 @@ const StoreManagementPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [salesStaff, setSalesStaff] = useState<SalesStaff[]>([]);
 
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addForm, setAddForm] = useState(emptyForm);
@@ -49,6 +57,11 @@ const StoreManagementPage: React.FC = () => {
   const authHeaders = { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } };
 
   useEffect(() => {
+    // Sales staff that can be assigned to a sales van
+    axios
+      .get('/api/stores/sales-staff', authHeaders)
+      .then(res => setSalesStaff(res.data?.data || []))
+      .catch(() => {});
     fetchStores();
   }, []);
 
@@ -80,6 +93,7 @@ const StoreManagementPage: React.FC = () => {
         store_name: addForm.store_name.trim(),
         store_code: addForm.store_code.trim(),
         store_type: addForm.store_type,
+        assigned_staff_id: addForm.store_type === 'sales_van' && addForm.assigned_staff_id ? Number(addForm.assigned_staff_id) : null,
         location: addForm.location.trim() || null,
         address: addForm.address.trim() || null,
       }, authHeaders);
@@ -102,6 +116,7 @@ const StoreManagementPage: React.FC = () => {
       store_name: store.store_name || '',
       store_code: store.store_code || '',
       store_type: store.store_type || 'storage',
+      assigned_staff_id: store.assigned_staff_id ? String(store.assigned_staff_id) : '',
       location: store.location || '',
       address: store.address || '',
     });
@@ -124,6 +139,7 @@ const StoreManagementPage: React.FC = () => {
         store_name: editForm.store_name.trim(),
         store_code: editForm.store_code.trim(),
         store_type: editForm.store_type,
+        assigned_staff_id: editForm.store_type === 'sales_van' && editForm.assigned_staff_id ? Number(editForm.assigned_staff_id) : null,
         location: editForm.location.trim() || null,
         address: editForm.address.trim() || null,
       }, authHeaders);
@@ -286,10 +302,11 @@ const StoreManagementPage: React.FC = () => {
               <div className="px-3 py-2 border-b border-gray-200 bg-gray-50 hidden md:block">
                 <div className="grid grid-cols-12 gap-3 text-[9px] font-medium text-gray-500 uppercase tracking-wider">
                   <div className="col-span-2">Code</div>
-                  <div className="col-span-3">Store Name</div>
+                  <div className="col-span-2">Store Name</div>
                   <div className="col-span-2">Type</div>
+                  <div className="col-span-2">Assigned Staff</div>
                   <div className="col-span-2">Location</div>
-                  <div className="col-span-3 text-right">Actions</div>
+                  <div className="col-span-2 text-right">Actions</div>
                 </div>
               </div>
 
@@ -316,7 +333,7 @@ const StoreManagementPage: React.FC = () => {
                       </div>
 
                       {/* Store Name */}
-                      <div className="md:col-span-3">
+                      <div className="md:col-span-2">
                         {editingStoreId === store.id ? (
                           <input
                             className="w-full text-xs font-medium text-gray-900 border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-red-500 focus:border-transparent"
@@ -359,6 +376,35 @@ const StoreManagementPage: React.FC = () => {
                         )}
                       </div>
 
+                      {/* Assigned staff (sales vans only) */}
+                      <div className="md:col-span-2">
+                        {editingStoreId === store.id ? (
+                          <select
+                            className="w-full text-xs text-gray-900 border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-red-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
+                            value={editForm.assigned_staff_id}
+                            disabled={editForm.store_type !== 'sales_van'}
+                            onChange={e => setEditForm(f => ({ ...f, assigned_staff_id: e.target.value }))}
+                          >
+                            <option value="">{editForm.store_type === 'sales_van' ? 'Unassigned' : 'Sales vans only'}</option>
+                            {salesStaff.map(s => {
+                              const takenBy = stores.find(o => o.id !== store.id && o.assigned_staff_id === s.id);
+                              return (
+                                <option key={s.id} value={s.id} disabled={!!takenBy}>
+                                  {s.name}{takenBy ? ` (on ${takenBy.store_name})` : ''}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        ) : store.store_type === 'sales_van' ? (
+                          <span className="text-xs text-gray-700">
+                            {salesStaff.find(s => s.id === store.assigned_staff_id)?.name ||
+                              (store.assigned_staff_id ? `Staff ${store.assigned_staff_id}` : <span className="text-gray-400 italic">Unassigned</span>)}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </div>
+
                       {/* Location */}
                       <div className="md:col-span-2">
                         {editingStoreId === store.id ? (
@@ -380,7 +426,7 @@ const StoreManagementPage: React.FC = () => {
                       </div>
 
                       {/* Actions */}
-                      <div className="md:col-span-3">
+                      <div className="md:col-span-2">
                         <div className="flex items-center justify-end gap-1.5">
                           {editingStoreId === store.id ? (
                             <>
@@ -498,6 +544,27 @@ const StoreManagementPage: React.FC = () => {
                           {STORE_TYPES.map(t => (
                             <option key={t.value} value={t.value}>{t.label}</option>
                           ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Assigned Staff
+                        </label>
+                        <select
+                          value={addForm.assigned_staff_id}
+                          disabled={addForm.store_type !== 'sales_van'}
+                          onChange={(e) => setAddForm(f => ({ ...f, assigned_staff_id: e.target.value }))}
+                          className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 focus:ring-1 focus:ring-red-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400"
+                        >
+                          <option value="">{addForm.store_type === 'sales_van' ? 'Unassigned' : 'Only available for Sales Van'}</option>
+                          {salesStaff.map(s => {
+                            const takenBy = stores.find(o => o.assigned_staff_id === s.id);
+                            return (
+                              <option key={s.id} value={s.id} disabled={!!takenBy}>
+                                {s.name}{takenBy ? ` (on ${takenBy.store_name})` : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
                       <div>

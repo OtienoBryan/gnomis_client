@@ -368,6 +368,7 @@ const ExecutiveDashboardPage = () => {
     { to: '/pending-payments', label: 'Pending Payments', icon: <ClockIcon className="h-4 w-4" />, bgColor: 'bg-yellow-50', iconColor: 'text-yellow-600' },
     { to: '/sales-rep-performance', label: 'Sales Rep Performance', icon: <TrendingUpIcon className="h-4 w-4" />, bgColor: 'bg-red-50', iconColor: 'text-red-600' },
     { to: '/overall-attendance', label: 'Sales Rep Report', icon: <BarChart3Icon className="h-4 w-4" />, bgColor: 'bg-purple-50', iconColor: 'text-purple-600' },
+    { to: '/van-sales', label: 'Van Sales', icon: <ShoppingCartIcon className="h-4 w-4" />, bgColor: 'bg-green-50', iconColor: 'text-green-600' },
     { to: '/uplift-sales', label: 'Uplift Sales', icon: <TrendingUpIcon className="h-4 w-4" />, bgColor: 'bg-green-50', iconColor: 'text-green-600' },
     { to: '/unconfirmed-payments', label: 'Unconfirmed Payments', icon: <ClockIcon className="h-4 w-4" />, bgColor: 'bg-yellow-50', iconColor: 'text-yellow-600' },
     { to: '/dashboard/route-compliance', label: 'Sales Rep Compliance', icon: <MapPinIcon className="h-4 w-4" />, bgColor: 'bg-green-50', iconColor: 'text-green-600' },

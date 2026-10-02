@@ -98,6 +98,7 @@ import CheckedInSalesRepsPage from './pages/CheckedInSalesRepsPage';
 import StaffLocationPage from './pages/StaffLocationPage';
 import PaymentCollectionsPage from './pages/PaymentCollectionsPage';
 import StaffExpensesPage from './pages/StaffExpensesPage';
+import VanSalesPage from './pages/VanSalesPage';
 import AddVehiclePage from './pages/AddVehiclePage';
 import NewRawMaterialRequestPage from './pages/NewRawMaterialRequestPage';
 import StoreManagementPage from './pages/StoreManagementPage';
@@ -805,6 +806,11 @@ const App = () => {
             <Route path="/loading-sheet/:id" element={
               <RoleBasedRoute allowedRoles={['admin', 'manager', 'executive', 'sales', 'stock']} fallbackPath="/sales-dashboard">
                 <LoadingSheetDetailPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/van-sales" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'sales', 'executive', 'finance', 'stock']} fallbackPath="/sales-dashboard">
+                <VanSalesPage />
               </RoleBasedRoute>
             } />
             <Route path="/staff-expenses" element={
