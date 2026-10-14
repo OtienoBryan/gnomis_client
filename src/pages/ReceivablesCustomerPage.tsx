@@ -36,6 +36,8 @@ const ReceivablesCustomerPage: React.FC = () => {
   const navigate = useNavigate();
   const [selectedInvoices, setSelectedInvoices] = useState<string[]>([]);
   const [showBulkModal, setShowBulkModal] = useState(false);
+  const [singlePayInvoice, setSinglePayInvoice] = useState<any | null>(null);
+  const [pendingInvoice, setPendingInvoice] = useState<any | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'overdue'>('all');
   
@@ -94,8 +96,9 @@ const ReceivablesCustomerPage: React.FC = () => {
       if (res.data.success) {
         // Only show invoices not fully paid
         const pending = (res.data.data || []).filter((inv: any) => {
-          const amountPaid = inv.amount_paid || 0;
-          return inv.total_amount > amountPaid;
+          // MySQL returns DECIMAL/SUM as strings; compare numerically, not lexicographically
+          const amountPaid = Number(inv.amount_paid) || 0;
+          return Number(inv.total_amount) > amountPaid;
         });
         console.log('Filtered pending invoices:', pending);
         setInvoices(pending);
@@ -173,6 +176,8 @@ const ReceivablesCustomerPage: React.FC = () => {
     return { status: 'pending', label: 'Pending', color: 'text-yellow-600 bg-yellow-100', icon: Clock };
   };
 
+  const canPay = user?.role === 'admin' || user?.role === 'sales';
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
@@ -186,7 +191,7 @@ const ReceivablesCustomerPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-4">
         {/* Header Section */}
         <div className="mb-4">
           <div className="flex items-center gap-3 mb-3">
@@ -256,7 +261,6 @@ const ReceivablesCustomerPage: React.FC = () => {
                     onClick={() => setShowBulkModal(true)}
                   >
                     <div className="flex items-center gap-1.5">
-                      <DollarSign className="h-3 w-3" />
                       Bulk Payment
                       {selectedInvoices.length > 0 && (
                         <span className="bg-white text-red-600 px-1.5 py-0.5 rounded-full text-[9px] font-bold">
@@ -377,7 +381,11 @@ const ReceivablesCustomerPage: React.FC = () => {
                     <th className="px-3 py-2 text-left text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-3 py-2 text-right text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Total</th>
                     <th className="px-3 py-2 text-right text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Paid</th>
+                    <th className="px-3 py-2 text-right text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Pending Confirmation</th>
                     <th className="px-3 py-2 text-right text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Balance</th>
+                    {canPay && (
+                      <th className="px-3 py-2 text-right text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Action</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-100">
@@ -434,10 +442,33 @@ const ReceivablesCustomerPage: React.FC = () => {
                           <span className="text-xs text-green-600 font-medium">{formatCurrency(inv.amount_paid || 0)}</span>
                         </td>
                         <td className="px-3 py-2 text-right">
+                          {Number(inv.amount_pending) > 0 ? (
+                            <button
+                              className="text-xs text-yellow-600 font-medium underline hover:text-yellow-700"
+                              onClick={(e) => { e.stopPropagation(); setPendingInvoice(inv); }}
+                              title="View payments pending confirmation"
+                            >
+                              {formatCurrency(Number(inv.amount_pending))}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right">
                           <span className={`text-xs font-bold ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
                             {formatCurrency(balance)}
                           </span>
                         </td>
+                        {canPay && (
+                          <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="px-2 py-1 rounded-md bg-red-600 text-white text-[10px] font-medium hover:bg-red-700 transition-colors"
+                              onClick={() => setSinglePayInvoice(inv)}
+                            >
+                              Pay
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -567,6 +598,245 @@ const ReceivablesCustomerPage: React.FC = () => {
           }}
         />
       )}
+
+      {/* Pending Confirmation Modal */}
+      {pendingInvoice && (
+        <PendingPaymentsModal
+          invoice={pendingInvoice}
+          canManage={canPay}
+          onClose={() => setPendingInvoice(null)}
+          onChanged={() => fetchPendingInvoices(customerId || '')}
+        />
+      )}
+
+      {/* Single Invoice Payment Modal */}
+      {canPay && (
+        <BulkPaymentModal
+          open={!!singlePayInvoice}
+          title={singlePayInvoice ? `Record Payment – ${singlePayInvoice.so_number}` : undefined}
+          onClose={() => setSinglePayInvoice(null)}
+          invoices={singlePayInvoice ? [singlePayInvoice] : []}
+          customerId={customerId}
+          userRole={user?.role}
+          onSuccess={() => {
+            fetchPendingInvoices(customerId || '');
+            setSinglePayInvoice(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Lists payments awaiting confirmation for one invoice, like the Unconfirmed Payments page
+const PendingPaymentsModal: React.FC<{
+  invoice: any;
+  canManage: boolean;
+  onClose: () => void;
+  onChanged: () => void;
+}> = ({ invoice, canManage, onClose, onChanged }) => {
+  const [receipts, setReceipts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<any | null>(null);
+  const [confirmReference, setConfirmReference] = useState('');
+  const [confirmDate, setConfirmDate] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await axios.get('/api/financial/receipts', {
+        params: { status: 'in pay', invoice_id: invoice.id },
+      });
+      if (res.data.success) setReceipts(res.data.data || []);
+      else setError(res.data.error || 'Failed to load pending payments');
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message || 'Failed to load pending payments');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, [invoice.id]);
+
+  const startConfirm = (r: any) => {
+    setConfirming(r);
+    setConfirmReference(r.reference || '');
+    setConfirmDate(new Date().toISOString().slice(0, 10));
+  };
+
+  const submitConfirm = async () => {
+    if (!confirming) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await axios.put(`/api/financial/receipts/${confirming.id}/confirm`, {
+        status: 'confirmed',
+        reference: confirmReference,
+        receipt_date: confirmDate,
+      });
+      setConfirming(null);
+      await load();
+      onChanged();
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message || 'Failed to confirm payment');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const decline = async (r: any) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await axios.put(`/api/financial/receipts/${r.id}/decline`, { status: 'cancelled' });
+      await load();
+      onChanged();
+    } catch (err: any) {
+      setError(err.response?.data?.error || err.message || 'Failed to decline payment');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const total = receipts.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+      <div className="bg-white rounded-md shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden">
+        <div className="bg-gradient-to-r from-yellow-500 to-orange-500 px-3 py-2 text-white flex items-center justify-between">
+          <div>
+            <h2 className="text-xs font-bold">Payments Pending Confirmation – {invoice.so_number}</h2>
+            <p className="text-[10px] opacity-90">
+              {receipts.length} payment(s) • Total: {formatCurrency(total)}
+            </p>
+          </div>
+          <button className="p-0.5 rounded-full hover:bg-white hover:bg-opacity-20" onClick={onClose}>
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-3 overflow-y-auto max-h-[70vh]">
+          {error && (
+            <div className="mb-2 bg-red-50 border border-red-200 rounded-md p-2 text-xs text-red-700">{error}</div>
+          )}
+          {loading ? (
+            <p className="text-xs text-gray-500 text-center py-4">Loading...</p>
+          ) : receipts.length === 0 ? (
+            <p className="text-xs text-gray-500 text-center py-4">No payments pending confirmation</p>
+          ) : (
+            <div className="overflow-x-auto border border-gray-200 rounded-md">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {['Receipt #', 'Date', 'Account', 'Method', 'Amount', 'Reference', 'Notes'].map(h => (
+                      <th
+                        key={h}
+                        className={`px-3 py-2 text-[9px] font-semibold text-gray-500 uppercase tracking-wider ${h === 'Amount' ? 'text-right' : 'text-left'}`}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                    {canManage && (
+                      <th className="px-3 py-2 text-center text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {receipts.map(r => (
+                    <tr key={r.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-900">{r.receipt_number}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700">{formatDate(r.receipt_date)}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700">{r.account_name || `Account ${r.account_id || '-'}`}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">
+                        <span className="px-1.5 py-0.5 text-[9px] font-medium bg-orange-100 text-orange-800 rounded-full">
+                          {r.payment_method}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-right text-xs font-bold text-orange-600">
+                        {formatCurrency(Number(r.amount))}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-700">{r.reference || '-'}</td>
+                      <td className="px-3 py-2 text-xs text-gray-700 max-w-[160px] truncate">{r.notes || '-'}</td>
+                      {canManage && (
+                        <td className="px-3 py-2 whitespace-nowrap text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => startConfirm(r)}
+                              disabled={busy}
+                              className="px-2 py-1 bg-green-600 text-white text-[10px] font-medium rounded-md hover:bg-green-700 disabled:opacity-50"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => decline(r)}
+                              disabled={busy}
+                              className="px-2 py-1 bg-red-600 text-white text-[10px] font-medium rounded-md hover:bg-red-700 disabled:opacity-50"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {confirming && (
+            <div className="mt-3 border border-green-200 bg-green-50 rounded-md p-3">
+              <h3 className="text-xs font-semibold text-gray-900 mb-2">
+                Confirm {confirming.receipt_number} ({formatCurrency(Number(confirming.amount))})
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[10px] font-medium text-gray-700 mb-1">Reference *</label>
+                  <input
+                    type="text"
+                    value={confirmReference}
+                    onChange={e => setConfirmReference(e.target.value)}
+                    placeholder="Enter payment reference"
+                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:ring-1 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-medium text-gray-700 mb-1">Receipt Date *</label>
+                  <input
+                    type="date"
+                    value={confirmDate}
+                    onChange={e => setConfirmDate(e.target.value)}
+                    className="w-full border border-gray-300 rounded-md px-2 py-1 text-xs focus:ring-1 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-2.5">
+                <button
+                  onClick={() => setConfirming(null)}
+                  disabled={busy}
+                  className="px-3 py-1.5 text-xs text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitConfirm}
+                  disabled={busy || !confirmReference || !confirmDate}
+                  className="px-3 py-1.5 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {busy ? 'Confirming...' : 'Confirm Payment'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
@@ -578,8 +848,9 @@ const BulkPaymentModal: React.FC<{
   invoices: any[];
   customerId?: string;
   userRole?: string;
+  title?: string;
   onSuccess: () => void;
-}> = ({ open, onClose, invoices, customerId, userRole, onSuccess }) => {
+}> = ({ open, onClose, invoices, customerId, userRole, title, onSuccess }) => {
   const [amounts, setAmounts] = useState<{ [id: string]: number }>({});
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [paymentMethod, setPaymentMethod] = useState('bank_transfer');
@@ -663,7 +934,7 @@ const BulkPaymentModal: React.FC<{
         <div className="bg-gradient-to-r from-red-600 to-red-700 px-3 py-2 text-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <h2 className="text-xs font-bold">Bulk Payment Assignment</h2>
+              <h2 className="text-xs font-bold">{title || 'Bulk Payment Assignment'}</h2>
               <span className="bg-yellow-400 text-red-900 px-1.5 py-0.5 rounded-full text-[9px] font-bold">
                 Admin/Sales Only
               </span>
@@ -826,7 +1097,6 @@ const BulkPaymentModal: React.FC<{
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5">
-                  <DollarSign className="h-3 w-3" />
                   Submit Payment
                 </div>
               )}

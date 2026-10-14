@@ -14,6 +14,7 @@ const CustomerLedgerPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [payments, setPayments] = useState<any[]>([]);
+  const [clientName, setClientName] = useState('');
 
   useEffect(() => {
     if (!id) return;
@@ -23,6 +24,8 @@ const CustomerLedgerPage: React.FC = () => {
         setError(null);
         const res = await clientService.getCustomerLedger(id);
         setLedger(res.success ? res.data : []);
+        // Whose ledger this is (the ledger works even if this lookup fails)
+        clientService.getClient(Number(id)).then((c) => setClientName(c?.name || '')).catch(() => {});
         // Fetch payments
         const payRes = await clientService.getCustomerPayments(id);
         setPayments(payRes.success ? payRes.data : []);
@@ -44,6 +47,7 @@ const CustomerLedgerPage: React.FC = () => {
     const matchesSearch =
       (entry.description && entry.description.toLowerCase().includes(searchLower)) ||
       (entry.reference_type && entry.reference_type.toLowerCase().includes(searchLower)) ||
+      (entry.reference && String(entry.reference).toLowerCase().includes(searchLower)) ||
       (entry.date && new Date(entry.date).toLocaleDateString().includes(searchLower));
     const matchesStart = !start || (entryDate && entryDate >= start);
     const matchesEnd = !end || (entryDate && entryDate <= end);
@@ -67,7 +71,7 @@ const CustomerLedgerPage: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">Customer Ledger</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Customer Ledger{clientName ? ` - ${clientName}` : ''}</h1>
         <div className="text-lg font-semibold text-gray-800">
           Current Balance: {currentBalance.toLocaleString(undefined, { style: 'currency', currency: 'KES' })}
         </div>
@@ -115,6 +119,7 @@ const CustomerLedgerPage: React.FC = () => {
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Reference Type</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Reference</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Debit</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Credit</th>
               <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Running Balance</th>
@@ -124,7 +129,7 @@ const CustomerLedgerPage: React.FC = () => {
           <tbody className="bg-white divide-y divide-gray-200">
             {paginatedLedger.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-4 text-center text-sm text-gray-500">No ledger entries found</td>
+                <td colSpan={8} className="px-4 py-4 text-center text-sm text-gray-500">No ledger entries found</td>
               </tr>
             ) : (
               paginatedLedger.map((entry, idx) => (
@@ -132,6 +137,7 @@ const CustomerLedgerPage: React.FC = () => {
                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{entry.date ? new Date(entry.date).toLocaleDateString() : '-'}</td>
                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{entry.description || '-'}</td>
                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{entry.reference_type || '-'}</td>
+                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">{entry.reference || '-'}</td>
                   <td className="px-4 py-2 whitespace-nowrap text-right text-sm text-green-600 font-semibold">
                     {entry.debit != null ? Number(entry.debit).toLocaleString(undefined, { style: 'currency', currency: 'KES' }) : '-'}
                   </td>

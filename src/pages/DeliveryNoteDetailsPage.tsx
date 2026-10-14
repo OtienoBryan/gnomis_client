@@ -4,8 +4,7 @@ import { salesOrdersService } from '../services/financialService';
 import { SalesOrder } from '../types/financial';
 import axios from 'axios';
 import { FileText, X, CreditCard } from 'lucide-react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { exportElementToA4Pdf } from '../utils/pdfExport';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -273,20 +272,7 @@ const SalesOrderDetailsPage: React.FC = () => {
 
   const handleExportPDF = async () => {
     if (!invoiceRef.current) return;
-    const element = invoiceRef.current;
-    const canvas = await html2canvas(element, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgProps = pdf.getImageProperties(imgData);
-    // Use a narrower width for the PDF (80% of page width)
-    const pdfWidth = pageWidth * 0.8;
-    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-    // Center the image on the page
-    const xOffset = (pageWidth - pdfWidth) / 2;
-    pdf.addImage(imgData, 'PNG', xOffset, 0, pdfWidth, pdfHeight);
-    pdf.save(`delivery_note_${salesOrder?.so_number || id}.pdf`);
+    await exportElementToA4Pdf(invoiceRef.current, `delivery_note_${salesOrder?.so_number || id}.pdf`);
   };
 
   if (loading) {
@@ -375,12 +361,12 @@ const SalesOrderDetailsPage: React.FC = () => {
             <div className="flex justify-between items-start">
               {/* Company Information */}
               <div className="company-info">
-                                 <img
-                   src="/woosh.jpg"
-                   alt="Company Logo"
-                   className="h-48 w-auto object-contain mb-0"
-                   style={{ maxWidth: '180px' }}
-                 />
+                <img
+                  src="/logo.jpg"
+                  alt="Company Logo"
+                  className="h-20 w-auto object-contain mb-2"
+                  style={{ maxWidth: '120px' }}
+                />
                 <h1 className="company-name">GNOMIS QUALITY PRODUCT</h1>
                 <p className="company-address">P.O Box 15470, Nairobi Kenya</p>
                 <p className="company-tax">Tax PIN: P051904794X</p>
@@ -403,7 +389,6 @@ const SalesOrderDetailsPage: React.FC = () => {
               <div className="bill-to">
                 <h3 className="section-title">Bill To:</h3>
                 <p className="customer-name">{salesOrder?.customer?.name || 'N/A'}</p>
-                <p className="customer-address">{salesOrder?.customer?.address || 'N/A'}</p>
                 <p className="customer-tax">Tax PIN: {salesOrder?.customer?.tax_pin || 'N/A'}</p>
               </div>
               
@@ -411,7 +396,6 @@ const SalesOrderDetailsPage: React.FC = () => {
                 <div className="ship-to">
                   <h3 className="section-title">Ship To:</h3>
                   <p className="customer-name">{salesOrder?.customer?.name || 'N/A'}</p>
-                  <p className="customer-address">{salesOrder?.customer?.address || 'N/A'}</p>
                 </div>
               </div>
             </div>
@@ -425,9 +409,6 @@ const SalesOrderDetailsPage: React.FC = () => {
                   <tr>
                     <th className="item-col">Item</th>
                     <th className="qty-col">Qty</th>
-                    <th className="price-col">Unit Price</th>
-                    <th className="tax-col">Tax</th>
-                    <th className="total-col">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -435,11 +416,6 @@ const SalesOrderDetailsPage: React.FC = () => {
                     <tr key={item.id}>
                       <td className="item-col">{item.product?.product_name || 'N/A'}</td>
                       <td className="qty-col">{item.quantity}</td>
-                      <td className="price-col">
-                        {item.net_price ? formatCurrency(item.net_price / item.quantity) : formatCurrency(item.unit_price / 1.16)}
-                      </td>
-                      <td className="tax-col">{formatCurrency(item.tax_amount || 0)}</td>
-                      <td className="total-col">{formatCurrency(item.total_price)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -449,50 +425,28 @@ const SalesOrderDetailsPage: React.FC = () => {
             )}
           </div>
 
-          {/* Totals Section */}
-          <div className="totals-section">
-            <div className="flex justify-end">
-              <table className="totals-table">
-                <tbody>
-                  <tr>
-                    <td className="label">Subtotal:</td>
-                    <td className="amount">{formatCurrency((salesOrder?.total_amount || 0) - (salesOrder?.tax_amount || 0))}</td>
-                  </tr>
-                  <tr>
-                    <td className="label">VAT (16%):</td>
-                    <td className="amount">{formatCurrency(salesOrder?.tax_amount || 0)}</td>
-                  </tr>
-                  <tr className="total-row">
-                    <td className="label">Total:</td>
-                    <td className="amount">{formatCurrency(salesOrder?.total_amount || 0)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
           {/* Footer */}
           <div className="invoice-footer">
             <div className="footer-content">
-              <div className="mb-6">
-                <div className="recipient-details max-w-md">
+              <div className="mb-3">
+                <div className="recipient-details">
                   <h4 className="section-subtitle">Recipient Details</h4>
-                  <div className="recipient-form">
-                    <div className="mb-3">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Name:</label>
-                      <div className="border-b-2 border-gray-300 pb-1 min-h-[20px]"></div>
+                  <div className="recipient-form grid grid-cols-2 gap-x-6 gap-y-2">
+                    <div>
+                      <label className="block font-medium text-gray-700">Name:</label>
+                      <div className="border-b-2 border-gray-300 min-h-[16px]"></div>
                     </div>
-                    <div className="mb-3">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Signature:</label>
-                      <div className="border-b-2 border-gray-300 pb-1 min-h-[40px]"></div>
+                    <div>
+                      <label className="block font-medium text-gray-700">ID/Phone:</label>
+                      <div className="border-b-2 border-gray-300 min-h-[16px]"></div>
                     </div>
-                    <div className="mb-3">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Date:</label>
-                      <div className="border-b-2 border-gray-300 pb-1 min-h-[20px]"></div>
+                    <div>
+                      <label className="block font-medium text-gray-700">Signature:</label>
+                      <div className="border-b-2 border-gray-300 min-h-[22px]"></div>
                     </div>
-                    <div className="mb-3">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">ID/Phone:</label>
-                      <div className="border-b-2 border-gray-300 pb-1 min-h-[20px]"></div>
+                    <div>
+                      <label className="block font-medium text-gray-700">Date:</label>
+                      <div className="border-b-2 border-gray-300 min-h-[22px]"></div>
                     </div>
                   </div>
                 </div>
@@ -714,58 +668,71 @@ const SalesOrderDetailsPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      <style>{`
+        .a4-invoice-print {
+          width: 210mm;
+          min-height: 297mm;
+          background: #fff;
+          margin: 0 auto;
+          padding: 20mm 15mm;
+          box-sizing: border-box;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .invoice-header {
+          border-bottom: 2px solid #e5e7eb;
+          padding-bottom: 15px;
+          margin-bottom: 15px;
+        }
+        .company-name { font-size: 14px; font-weight: bold; color: #1f2937; margin-bottom: 4px; }
+        .company-address, .company-tax { color: #6b7280; margin-bottom: 2px; font-size: 10px; }
+        .invoice-title { font-size: 20px; font-weight: bold; color: #1f2937; margin-bottom: 8px; }
+        .invoice-meta p { font-size: 10px; color: #374151; margin-bottom: 2px; }
+        .section-title { font-size: 10px; font-weight: bold; color: #374151; margin-bottom: 4px; text-transform: uppercase; }
+        .customer-name { font-weight: bold; color: #1f2937; margin-bottom: 2px; font-size: 11px; }
+        .customer-tax { color: #6b7280; font-size: 10px; }
+        .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .invoice-table th {
+          background: #f9fafb;
+          border: 1px solid #e5e7eb;
+          padding: 6px;
+          text-align: left;
+          font-weight: bold;
+          color: #374151;
+          font-size: 10px;
+          text-transform: uppercase;
+        }
+        .invoice-table td { border: 1px solid #e5e7eb; padding: 6px; color: #374151; font-size: 10px; }
+        .item-col { width: 80%; }
+        .qty-col { width: 20%; text-align: right !important; }
+        .invoice-footer { margin-top: 40px; }
+        .recipient-details {
+          border: 1px solid #e5e7eb;
+          border-radius: 6px;
+          padding: 8px 12px;
+          background-color: #f9fafb;
+        }
+        .recipient-details label { font-size: 9px; }
+        .recipient-form .border-b-2 { border-bottom: 2px solid #d1d5db; }
+        .section-subtitle {
+          font-size: 10px;
+          font-weight: 600;
+          color: #000;
+          margin-bottom: 4px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .footer-message { text-align: center; color: #6b7280; font-size: 10px; margin-top: 16px; }
+        @media print {
+          body { background: #fff !important; }
+          .a4-invoice-print { box-shadow: none !important; margin: 0 !important; }
+          .a4-invoice-print tr, .a4-invoice-print table { page-break-inside: avoid; }
+          .recipient-details { border: 1px solid #000 !important; background-color: #fff !important; }
+          .recipient-form .border-b-2 { border-bottom: 1px solid #000 !important; }
+        }
+      `}</style>
     </div>
   );
 };
 
 export default SalesOrderDetailsPage;
-
-<style>{`
-  .a4-invoice-print {
-    width: 1200px;
-    min-height: 1123px;
-    background: #fff;
-    margin: 0 auto;
-    padding: 16px 12px;
-    box-sizing: border-box;
-    position: relative;
-  }
-  .invoice-footer {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    padding: 0 12px 16px 12px;
-  }
-  .recipient-details {
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    padding: 12px;
-    background-color: #f9fafb;
-  }
-  .recipient-form .border-b-2 {
-    border-bottom: 2px solid #d1d5db;
-  }
-  .section-subtitle {
-    font-size: 14px;
-    font-weight: 600;
-    color: #000;
-    margin-bottom: 8px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  @media print {
-    body { background: #fff !important; }
-    .a4-invoice-print { box-shadow: none !important; }
-    .a4-invoice-print table { table-layout: fixed; width: 100%; }
-    .a4-invoice-print th, .a4-invoice-print td { word-break: break-word; overflow-wrap: break-word; padding: 4px 6px; font-size: 12px; }
-    .a4-invoice-print tr, .a4-invoice-print table { page-break-inside: avoid; }
-    .recipient-details { 
-      border: 1px solid #000 !important;
-      background-color: #fff !important;
-    }
-    .recipient-form .border-b-2 { 
-      border-bottom: 1px solid #000 !important;
-    }
-  }
-`}</style> 

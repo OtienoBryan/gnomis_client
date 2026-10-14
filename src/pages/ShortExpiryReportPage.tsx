@@ -6,16 +6,15 @@ import {
   ShortExpiryReportFilters 
 } from '../services/shortExpiryReportService';
 import { Calendar, ArrowLeft, Filter, Download, Search, Package, Hash, Calendar as CalendarIcon, Building2, User } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
-// Filter Modal Component
-const FilterModal: React.FC<{ 
-  isOpen: boolean; 
-  onClose: () => void;
+// Always-visible filters. Every control applies immediately (the page refetches on change).
+const FilterPanel: React.FC<{
   startDate: string;
   endDate: string;
   selectedOutlet: string;
   selectedSalesRep: string;
-  searchQuery: string;
   minDaysLeft: string;
   maxDaysLeft: string;
   outlets: { id: number; name: string }[];
@@ -24,217 +23,122 @@ const FilterModal: React.FC<{
   onEndDateChange: (date: string) => void;
   onOutletChange: (outlet: string) => void;
   onSalesRepChange: (salesRep: string) => void;
-  onSearchChange: (query: string) => void;
   onMinDaysLeftChange: (value: string) => void;
   onMaxDaysLeftChange: (value: string) => void;
-  onApplyFilters: () => void;
   onResetFilters: () => void;
-}> = ({ 
-  isOpen, 
-  onClose, 
-  startDate, 
-  endDate, 
-  selectedOutlet, 
-  selectedSalesRep, 
-  searchQuery,
+}> = ({
+  startDate,
+  endDate,
+  selectedOutlet,
+  selectedSalesRep,
   minDaysLeft,
   maxDaysLeft,
-  outlets, 
+  outlets,
   salesReps,
   onStartDateChange,
   onEndDateChange,
   onOutletChange,
   onSalesRepChange,
-  onSearchChange,
   onMinDaysLeftChange,
   onMaxDaysLeftChange,
-  onApplyFilters,
   onResetFilters
 }) => {
-  if (!isOpen) return null;
+  const inputCls =
+    'w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-500';
+  const labelCls = 'block text-[10px] text-gray-600 mb-1';
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div 
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
-          onClick={onClose}
-        ></div>
-
-        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-sm leading-6 font-medium text-gray-900">
-                Filter Reports
-              </h3>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 focus:outline-none focus:text-gray-600"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="modal-search" className="block text-xs font-medium text-gray-700 mb-2">
-                  Search
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="h-4 w-4 text-gray-400" />
-                  </div>
-                  <input
-                    type="text"
-                    id="modal-search"
-                    value={searchQuery}
-                    onChange={(e) => onSearchChange(e.target.value)}
-                    placeholder="Search product name, batch number, outlet, sales rep..."
-                    className="w-full pl-10 pr-3 py-1.5 border border-gray-300 rounded-md text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-xs font-medium text-gray-700 mb-2">Date Range</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="modal-start-date" className="block text-[10px] text-gray-600 mb-1">
-                      From Date
-                    </label>
-                    <input
-                      type="date"
-                      id="modal-start-date"
-                      value={startDate}
-                      onChange={(e) => onStartDateChange(e.target.value)}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="modal-end-date" className="block text-[10px] text-gray-600 mb-1">
-                      To Date
-                    </label>
-                    <input
-                      type="date"
-                      id="modal-end-date"
-                      value={endDate}
-                      onChange={(e) => onEndDateChange(e.target.value)}
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="modal-outlet-filter" className="block text-xs font-medium text-gray-700 mb-2">
-                  Outlet
-                </label>
-                <select
-                  id="modal-outlet-filter"
-                  value={selectedOutlet}
-                  onChange={(e) => onOutletChange(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
-                >
-                  <option value="all">All Outlets</option>
-                  {outlets.map((outlet) => (
-                    <option key={outlet.id} value={outlet.name}>
-                      {outlet.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="modal-sales-rep-filter" className="block text-xs font-medium text-gray-700 mb-2">
-                  Sales Representative
-                </label>
-                <select
-                  id="modal-sales-rep-filter"
-                  value={selectedSalesRep}
-                  onChange={(e) => onSalesRepChange(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
-                >
-                  <option value="all">All Sales Reps</option>
-                  {salesReps.map((salesRep) => (
-                    <option key={salesRep.id} value={salesRep.name}>
-                      {salesRep.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <h4 className="text-xs font-medium text-gray-700 mb-2">Days to expiry range</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="modal-min-days-left" className="block text-[10px] text-gray-600 mb-1">
-                      Min days
-                    </label>
-                    <input
-                      type="number"
-                      id="modal-min-days-left"
-                      value={minDaysLeft}
-                      onChange={(e) => onMinDaysLeftChange(e.target.value)}
-                      placeholder="e.g. 0"
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
-                      min={0}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="modal-max-days-left" className="block text-[10px] text-gray-600 mb-1">
-                      Max days
-                    </label>
-                    <input
-                      type="number"
-                      id="modal-max-days-left"
-                      value={maxDaysLeft}
-                      onChange={(e) => onMaxDaysLeftChange(e.target.value)}
-                      placeholder="e.g. 30"
-                      className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-500"
-                      min={0}
-                    />
-                  </div>
-                </div>
-                <p className="mt-1 text-[10px] text-gray-500">
-                  Filters products whose days to expiry fall between these values (expired items are treated as 0 days left).
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-            <button
-              type="button"
-              onClick={() => {
-                onApplyFilters();
-                onClose();
-              }}
-              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-3 py-1.5 bg-red-600 text-xs font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto"
-            >
-              Apply Filters
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                onResetFilters();
-                onClose();
-              }}
-              className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-3 py-1.5 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto"
-            >
-              Reset
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-3 py-1.5 bg-white text-xs font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:mt-0 sm:ml-3 sm:w-auto"
-            >
-              Cancel
-            </button>
-          </div>
+    <div className="mb-4 bg-white border border-gray-200 rounded-lg shadow-sm p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700">
+          <Filter className="w-3 h-3" />
+          Filters
+        </div>
+        <button
+          type="button"
+          onClick={onResetFilters}
+          className="px-2.5 py-1 bg-white border border-gray-300 rounded-md text-[10px] text-gray-700 hover:bg-gray-50"
+        >
+          Reset
+        </button>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+        <div>
+          <label htmlFor="filter-start-date" className={labelCls}>From Date</label>
+          <input
+            type="date"
+            id="filter-start-date"
+            value={startDate}
+            onChange={(e) => onStartDateChange(e.target.value)}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label htmlFor="filter-end-date" className={labelCls}>To Date</label>
+          <input
+            type="date"
+            id="filter-end-date"
+            value={endDate}
+            onChange={(e) => onEndDateChange(e.target.value)}
+            className={inputCls}
+          />
+        </div>
+        <div>
+          <label htmlFor="filter-outlet" className={labelCls}>Outlet</label>
+          <select
+            id="filter-outlet"
+            value={selectedOutlet}
+            onChange={(e) => onOutletChange(e.target.value)}
+            className={inputCls}
+          >
+            <option value="all">All Outlets</option>
+            {outlets.map((outlet) => (
+              <option key={outlet.id} value={outlet.name}>{outlet.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="filter-sales-rep" className={labelCls}>Sales Representative</label>
+          <select
+            id="filter-sales-rep"
+            value={selectedSalesRep}
+            onChange={(e) => onSalesRepChange(e.target.value)}
+            className={inputCls}
+          >
+            <option value="all">All Sales Reps</option>
+            {salesReps.map((salesRep) => (
+              <option key={salesRep.id} value={salesRep.name}>{salesRep.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="filter-min-days" className={labelCls}>Min days to expiry</label>
+          <input
+            type="number"
+            id="filter-min-days"
+            value={minDaysLeft}
+            onChange={(e) => onMinDaysLeftChange(e.target.value)}
+            placeholder="e.g. 0"
+            className={inputCls}
+            min={0}
+          />
+        </div>
+        <div>
+          <label htmlFor="filter-max-days" className={labelCls}>Max days to expiry</label>
+          <input
+            type="number"
+            id="filter-max-days"
+            value={maxDaysLeft}
+            onChange={(e) => onMaxDaysLeftChange(e.target.value)}
+            placeholder="e.g. 30"
+            className={inputCls}
+            min={0}
+          />
         </div>
       </div>
+      <p className="mt-1.5 text-[10px] text-gray-500">
+        The days-to-expiry range narrows the rows on the current page (expired items count as 0 days left).
+      </p>
     </div>
   );
 };
@@ -259,8 +163,9 @@ const ShortExpiryReportPage: React.FC = () => {
     total: 0,
     totalPages: 0
   });
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [totalValue, setTotalValue] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const fetchReports = async (filters?: ShortExpiryReportFilters) => {
     setLoading(true);
@@ -273,6 +178,7 @@ const ShortExpiryReportPage: React.FC = () => {
       });
       setReports(response.data);
       setPagination(response.pagination);
+      setTotalValue(Number(response.summary?.totalValue) || 0);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch short expiry reports');
     }
@@ -353,10 +259,6 @@ const ShortExpiryReportPage: React.FC = () => {
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
-  const handleApplyFilters = () => {
-    setPagination(prev => ({ ...prev, page: 1 }));
-  };
-
   function calculateDaysToExpiry(expiryDate: string): { days: number; status: 'expired' | 'critical' | 'warning' | 'good' } {
     if (!expiryDate) return { days: 0, status: 'good' };
     
@@ -383,21 +285,131 @@ const ShortExpiryReportPage: React.FC = () => {
     }
   }
 
-  const filteredReports = useMemo(() => {
+  // Subtotal for a row = quantity x the product's selling price
+  const rowSubtotal = (report: { quantity: number | string; unitPrice?: number | string | null }) =>
+    (Number(report.quantity) || 0) * (Number(report.unitPrice) || 0);
+
+  const formatMoney = (n: number) =>
+    n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const applyDaysFilter = (list: ShortExpiryReport[]) => {
     const hasMin = minDaysLeft !== '';
     const hasMax = maxDaysLeft !== '';
-    if (!hasMin && !hasMax) return reports;
+    if (!hasMin && !hasMax) return list;
 
     const min = hasMin ? parseInt(minDaysLeft, 10) : 0;
     const max = hasMax ? parseInt(maxDaysLeft, 10) : Number.POSITIVE_INFINITY;
-    if ((hasMin && isNaN(min)) || (hasMax && isNaN(max))) return reports;
+    if ((hasMin && isNaN(min)) || (hasMax && isNaN(max))) return list;
 
-    return reports.filter((report) => {
+    return list.filter((report) => {
       const { days, status } = calculateDaysToExpiry(report.expiry_date);
       const effectiveDaysLeft = status === 'expired' ? 0 : days;
       return effectiveDaysLeft >= min && effectiveDaysLeft <= max;
     });
-  }, [reports, minDaysLeft, maxDaysLeft]);
+  };
+
+  const filteredReports = useMemo(
+    () => applyDaysFilter(reports),
+    [reports, minDaysLeft, maxDaysLeft]
+  );
+
+  // The days-to-expiry filter only narrows the rows on the current page, so when it is active the
+  // card totals those rows instead of the server-side grand total.
+  const daysFilterActive = minDaysLeft !== '' || maxDaysLeft !== '';
+  const cardTotal = daysFilterActive
+    ? filteredReports.reduce((sum, r) => sum + rowSubtotal(r), 0)
+    : totalValue;
+
+  // PDF of every record matching the current filters (not just this page): all columns plus the total
+  const handleExportPDF = async () => {
+    setExportingPdf(true);
+    setError(null);
+    try {
+      const filters: ShortExpiryReportFilters = { startDate, endDate };
+      if (selectedOutlet !== 'all') filters.outlet = selectedOutlet;
+      if (selectedSalesRep !== 'all') filters.salesRep = selectedSalesRep;
+      if (searchQuery.trim()) filters.search = searchQuery.trim();
+
+      // limit -1 asks the server for all matching rows
+      const response = await shortExpiryReportService.getAll({ ...filters, page: 1, limit: -1 });
+      const rows = applyDaysFilter(response.data);
+      const grandTotal = rows.reduce((sum, r) => sum + rowSubtotal(r), 0);
+
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+
+      doc.setFontSize(14);
+      doc.text('Short Expiry Report', 8, 12);
+      doc.setFontSize(8);
+      doc.setTextColor(100);
+      const filterBits = [
+        `Created: ${startDate || 'all'} to ${endDate || 'all'}`,
+        selectedOutlet !== 'all' ? `Outlet: ${selectedOutlet}` : null,
+        selectedSalesRep !== 'all' ? `Sales rep: ${selectedSalesRep}` : null,
+        searchQuery.trim() ? `Search: ${searchQuery.trim()}` : null,
+        minDaysLeft !== '' || maxDaysLeft !== '' ? `Days to expiry: ${minDaysLeft || 0} - ${maxDaysLeft || 'any'}` : null,
+      ].filter(Boolean);
+      doc.text(filterBits.join('   |   '), 8, 17);
+      doc.text(`Generated ${new Date().toLocaleString()}   |   ${rows.length} record${rows.length === 1 ? '' : 's'}`, 8, 21);
+      doc.setTextColor(0);
+      doc.setFontSize(10);
+      doc.text(`Total value: KES ${formatMoney(grandTotal)}`, pageWidth - 8, 12, { align: 'right' });
+
+      const head = [[
+        'Region', 'Outlet', 'Outlet Type', 'Outlet Account', 'Sales Rep', 'Product Name', 'Qty', 'Unit Price',
+        'Subtotal', 'Batch No.', 'SKU', 'Expiry Date', 'Days to Expiry', 'Created At', 'Comment',
+      ]];
+      const body = rows.map((r) => {
+        const { days, status } = calculateDaysToExpiry(r.expiry_date);
+        const hasPrice = r.unitPrice != null && r.unitPrice !== '';
+        return [
+          r.regionName || 'N/A',
+          r.outletName || 'N/A',
+          r.outletTypeName || 'N/A',
+          r.outletAccountName || 'N/A',
+          r.salesRepName || 'N/A',
+          r.product_name || '',
+          String(r.quantity ?? ''),
+          hasPrice ? formatMoney(Number(r.unitPrice)) : 'N/A',
+          hasPrice ? formatMoney(rowSubtotal(r)) : 'N/A',
+          r.batch_number || '',
+          r.productSku || 'N/A',
+          r.expiry_date || '',
+          status === 'expired' ? `Expired ${days}d ago` : `${days}d left`,
+          formatDate(r.createdAt),
+          r.comment || '-',
+        ];
+      });
+      const foot = [[
+        { content: 'Total', colSpan: 8, styles: { halign: 'right' as const } },
+        { content: formatMoney(grandTotal), styles: { halign: 'right' as const } },
+        { content: '', colSpan: 6 },
+      ]];
+
+      autoTable(doc, {
+        head,
+        body,
+        foot,
+        startY: 25,
+        margin: { left: 8, right: 8 },
+        styles: { fontSize: 6, cellPadding: 1.2, overflow: 'linebreak' },
+        headStyles: { fillColor: [55, 65, 81], textColor: 255, fontStyle: 'bold' },
+        footStyles: { fillColor: [243, 244, 246], textColor: 0, fontStyle: 'bold' },
+        showFoot: 'lastPage',
+        columnStyles: {
+          6: { halign: 'right' },
+          7: { halign: 'right' },
+          8: { halign: 'right' },
+          14: { cellWidth: 30 },
+        },
+      });
+
+      doc.save(`short-expiry-report-${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (err: any) {
+      setError(err.message || 'Failed to export PDF');
+    }
+    setExportingPdf(false);
+  };
 
   const handleExportCSV = async () => {
     setExporting(true);
@@ -485,21 +497,33 @@ const ShortExpiryReportPage: React.FC = () => {
             
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setIsFilterModalOpen(true)}
-                className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2 transition-colors text-xs"
-              >
-                <Filter className="w-3 h-3" />
-                Filter
-              </button>
-              <button
                 onClick={handleExportCSV}
                 disabled={exporting}
                 className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs"
               >
                 <Download className="w-3 h-3" />
-                {exporting ? 'Exporting...' : 'Export'}
+                {exporting ? 'Exporting...' : 'Export CSV'}
+              </button>
+              <button
+                onClick={handleExportPDF}
+                disabled={exportingPdf}
+                className="px-3 py-1.5 bg-gray-700 text-white rounded-lg hover:bg-gray-800 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+              >
+                <Download className="w-3 h-3" />
+                {exportingPdf ? 'Generating PDF...' : 'Export PDF'}
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Summary */}
+        <div className="mb-4 max-w-xs">
+          <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+            <p className="text-[10px] text-gray-500">
+              {daysFilterActive ? 'Total value (filtered rows on this page)' : 'Total value of short expiry stock'}
+            </p>
+            <p className="text-lg font-bold text-red-600">KES {formatMoney(cardTotal)}</p>
+            <p className="text-[10px] text-gray-400">Quantity x selling price</p>
           </div>
         </div>
 
@@ -518,6 +542,25 @@ const ShortExpiryReportPage: React.FC = () => {
             />
           </div>
         </div>
+
+        {/* Filters */}
+        <FilterPanel
+          startDate={startDate}
+          endDate={endDate}
+          selectedOutlet={selectedOutlet}
+          selectedSalesRep={selectedSalesRep}
+          minDaysLeft={minDaysLeft}
+          maxDaysLeft={maxDaysLeft}
+          outlets={outlets}
+          salesReps={salesReps}
+          onStartDateChange={handleStartDateChange}
+          onEndDateChange={handleEndDateChange}
+          onOutletChange={handleOutletChange}
+          onSalesRepChange={handleSalesRepChange}
+          onMinDaysLeftChange={setMinDaysLeft}
+          onMaxDaysLeftChange={setMaxDaysLeft}
+          onResetFilters={handleResetFilters}
+        />
 
         {/* Error Message */}
         {error && (
@@ -564,6 +607,12 @@ const ShortExpiryReportPage: React.FC = () => {
                       </th>
                       <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                         Quantity
+                      </th>
+                      <th className="px-3 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                        Unit Price
+                      </th>
+                      <th className="px-3 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                        Subtotal
                       </th>
                       <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                         Batch Number
@@ -630,6 +679,18 @@ const ShortExpiryReportPage: React.FC = () => {
                         <td className="px-3 py-2 whitespace-nowrap">
                           <span className="text-[10px] text-gray-900">{report.quantity}</span>
                         </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-right">
+                          <span className="text-[10px] text-gray-900">
+                            {report.unitPrice != null && report.unitPrice !== ''
+                              ? Number(report.unitPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                              : 'N/A'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-right">
+                          <span className="text-[10px] font-medium text-gray-900">
+                            {report.unitPrice != null && report.unitPrice !== '' ? formatMoney(rowSubtotal(report)) : 'N/A'}
+                          </span>
+                        </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           <div className="flex items-center">
                             <Hash className="h-3 w-3 text-gray-400 mr-1.5" />
@@ -671,7 +732,7 @@ const ShortExpiryReportPage: React.FC = () => {
                     ))}
                     {filteredReports.length === 0 && reports.length > 0 && (
                       <tr>
-                        <td colSpan={13} className="px-3 py-6 text-center text-[10px] text-gray-500">
+                        <td colSpan={15} className="px-3 py-6 text-center text-[10px] text-gray-500">
                           No reports match the selected days-to-expiry filter.
                         </td>
                       </tr>
@@ -749,29 +810,6 @@ const ShortExpiryReportPage: React.FC = () => {
           )}
         </div>
 
-        {/* Filter Modal */}
-        <FilterModal
-          isOpen={isFilterModalOpen}
-          onClose={() => setIsFilterModalOpen(false)}
-          startDate={startDate}
-          endDate={endDate}
-          selectedOutlet={selectedOutlet}
-          selectedSalesRep={selectedSalesRep}
-          searchQuery={searchQuery}
-          minDaysLeft={minDaysLeft}
-          maxDaysLeft={maxDaysLeft}
-          outlets={outlets}
-          salesReps={salesReps}
-          onStartDateChange={handleStartDateChange}
-          onEndDateChange={handleEndDateChange}
-          onOutletChange={handleOutletChange}
-          onSalesRepChange={handleSalesRepChange}
-          onSearchChange={handleSearchChange}
-          onMinDaysLeftChange={setMinDaysLeft}
-          onMaxDaysLeftChange={setMaxDaysLeft}
-          onApplyFilters={handleApplyFilters}
-          onResetFilters={handleResetFilters}
-        />
       </div>
     </div>
   );

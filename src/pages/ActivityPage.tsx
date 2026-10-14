@@ -32,7 +32,7 @@ const ActivityPage: React.FC = () => {
 
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
-  const [status, setStatus] = useState('1'); // In Progress by default
+  const [status, setStatus] = useState(''); // All statuses by default
   const [region, setRegion] = useState('');
   const [routeFilter, setRouteFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
@@ -273,7 +273,6 @@ const ActivityPage: React.FC = () => {
                     <th className="px-3 py-2 text-left text-[9px] font-semibold text-gray-500 uppercase tracking-wider">FMR</th>
                     <th className="px-3 py-2 text-left text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Region</th>
                     <th className="px-3 py-2 text-left text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Client</th>
-                    <th className="px-3 py-2 text-left text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Route</th>
                     <th className="px-3 py-2 text-left text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-3 py-2 text-left text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Check-In Image</th>
                     <th className="px-3 py-2 text-left text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Check-In</th>
@@ -287,7 +286,6 @@ const ActivityPage: React.FC = () => {
                       <td className="px-3 py-2 text-xs font-medium text-gray-900">{r.user_name || `User ${r.userId}`}</td>
                       <td className="px-3 py-2 text-xs text-gray-700">{r.region_name || '-'}</td>
                       <td className="px-3 py-2 text-xs text-gray-700">{r.client_name || (r.clientId ? `Client ${r.clientId}` : '-')}</td>
-                      <td className="px-3 py-2 text-xs text-gray-700">{r.route_name || '-'}</td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <span className={`inline-flex px-1.5 py-0.5 text-[9px] font-semibold rounded-full ${statusBadgeClass(Number(r.status))}`}>
                           {statusLabel(Number(r.status))}
@@ -313,7 +311,7 @@ const ActivityPage: React.FC = () => {
                   ))}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-3 py-10 text-center text-xs text-gray-500">No activity found.</td>
+                      <td colSpan={8} className="px-3 py-10 text-center text-xs text-gray-500">No activity found.</td>
                     </tr>
                   )}
                 </tbody>

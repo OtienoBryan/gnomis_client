@@ -24,7 +24,7 @@ const Header: React.FC<HeaderProps> = ({ setSidebarOpen }) => {
         <div className="relative flex justify-between items-center h-12">
           {/* Centered title */}
           <h1 className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xl font-bold tracking-wide text-blue-950 whitespace-nowrap pointer-events-none">
-            GNOMIS QUALITY PRODUCTS
+            GNOMIS QUALITY PRODUCTS LTD
           </h1>
 
           {/* Left side - Mobile menu button */}

@@ -265,6 +265,11 @@ export const purchaseOrdersService = {
 
 // Sales Orders Service
 export const salesOrdersService = {
+  sendInvoiceEmail: async (id: number, payload: { to?: string; cc?: string; subject?: string; message?: string }): Promise<ApiResponse<any>> => {
+    const response = await axios.post(`${API_BASE_URL}/financial/sales-orders/${id}/send-invoice`, payload);
+    return response.data;
+  },
+
   getAll: async (params?: { status?: string; client_id?: number }): Promise<ApiResponse<any[]>> => {
     const response = await axios.get(`${API_BASE_URL}/financial/sales-orders`, { params });
     return response.data;
@@ -804,6 +809,7 @@ export interface Return {
   region_name?: string;
   outlet_account_name?: string;
   salesrep_name?: string;
+  photo_url?: string | null;
 }
 
 export interface ReturnItem {

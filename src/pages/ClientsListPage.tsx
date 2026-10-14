@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import { clientService, Client as ApiClient } from '../services/clientService';
 import { GoogleMap, Marker, InfoWindow, useJsApiLoader } from '@react-google-maps/api';
 import { GOOGLE_MAPS_API_KEY, GOOGLE_MAPS_LIBRARIES } from '../config/googleMaps';
 import {
+  BookOpen,
   Search,
   Plus,
   Route,
@@ -20,7 +21,6 @@ import {
   Eye,
   ChevronUp,
   ArrowUpDown,
-  Building2,
   Filter,
   MapPin,
   Lock,
@@ -344,15 +344,27 @@ const AddClientModal: React.FC<{
             />
           </div>
 
-          <div hidden>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-              placeholder="Enter email address (optional)"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                placeholder="Enter email address (optional)"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
+              <input
+                type="text"
+                value={form.contact}
+                onChange={e => setForm(f => ({ ...f, contact: e.target.value }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                placeholder="Enter phone number (optional)"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -381,35 +393,6 @@ const AddClientModal: React.FC<{
                 <option value="">{form.countryId ? 'Select route' : 'Select country first'}</option>
                 {routes.map(r => (
                   <option key={r.id} value={r.id}>{r.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Client Type</label>
-              <select
-                value={form.client_type || 0}
-                onChange={e => setForm(f => ({ ...f, client_type: parseInt(e.target.value, 10) || undefined }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-              >
-                <option value={0}>Not assigned</option>
-                {clientTypes.map(type => (
-                  <option key={type.id} value={type.id}>{type.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Outlet Account</label>
-              <select
-                value={form.outlet_account || 0}
-                onChange={e => setForm(f => ({ ...f, outlet_account: parseInt(e.target.value, 10) || undefined }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-              >
-                <option value={0}>Not assigned</option>
-                {outletAccounts.map(account => (
-                  <option key={account.id} value={account.id}>{account.name}</option>
                 ))}
               </select>
             </div>
@@ -448,16 +431,10 @@ const FilterModal: React.FC<{
   onClose: () => void;
   filterRegion: string;
   filterRoute: string;
-  filterType: string;
-  filterOutletAccount: string;
   regions: Region[];
   routes: Route[];
-  clientTypes: { id: number; name: string }[];
-  outletAccounts: { id: number; name: string }[];
   onRegionChange: (region: string) => void;
   onRouteChange: (route: string) => void;
-  onTypeChange: (type: string) => void;
-  onOutletAccountChange: (outlet: string) => void;
   onApplyFilters: () => void;
   onResetFilters: () => void;
 }> = ({
@@ -465,16 +442,10 @@ const FilterModal: React.FC<{
   onClose,
   filterRegion,
   filterRoute,
-  filterType,
-  filterOutletAccount,
   regions,
   routes,
-  clientTypes,
-  outletAccounts,
   onRegionChange,
   onRouteChange,
-  onTypeChange,
-  onOutletAccountChange,
   onApplyFilters,
   onResetFilters
 }) => {
@@ -540,44 +511,6 @@ const FilterModal: React.FC<{
                   ))}
                 </select>
               </div>
-
-              <div>
-                <label htmlFor="filter-type" className="block text-xs font-medium text-gray-700 mb-2">
-                  Client Type
-                </label>
-                <select
-                  id="filter-type"
-                  value={filterType}
-                  onChange={(e) => onTypeChange(e.target.value)}
-                  className="w-full text-xs border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="all">All Types</option>
-                  {clientTypes.map(type => (
-                    <option key={type.id} value={type.id.toString()}>
-                      {type.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="filter-outlet" className="block text-xs font-medium text-gray-700 mb-2">
-                  Outlet Account
-                </label>
-                <select
-                  id="filter-outlet"
-                  value={filterOutletAccount}
-                  onChange={(e) => onOutletAccountChange(e.target.value)}
-                  className="w-full text-xs border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  <option value="all">All Outlet Accounts</option>
-                  {outletAccounts.map(account => (
-                    <option key={account.id} value={account.id.toString()}>
-                      {account.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
             </div>
           </div>
 
@@ -613,6 +546,8 @@ const ClientsListPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isLeader = (user?.role || '').toLowerCase() === 'leader';
+  // Same roles that can open /customers/:id/ledger
+  const canViewLedger = ['admin', 'manager', 'accountant', 'executive', 'finance'].includes((user?.role || '').toLowerCase());
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -638,8 +573,6 @@ const ClientsListPage: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [filterRegion, setFilterRegion] = useState<string>('all');
   const [filterRoute, setFilterRoute] = useState<string>('all');
-  const [filterType, setFilterType] = useState<string>('all');
-  const [filterOutletAccount, setFilterOutletAccount] = useState<string>('all');
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [allRegions, setAllRegions] = useState<Region[]>([]);
   const [allRoutes, setAllRoutes] = useState<Route[]>([]);
@@ -727,8 +660,6 @@ const ClientsListPage: React.FC = () => {
       }
       if (filterRegion !== 'all') params.regionId = filterRegion;
       if (filterRoute !== 'all') params.routeId = filterRoute;
-      if (filterType !== 'all') params.clientType = filterType;
-      if (filterOutletAccount !== 'all') params.outletAccount = filterOutletAccount;
       const res = await axios.get('/api/clients', { params });
       const data = res.data;
 
@@ -768,7 +699,7 @@ const ClientsListPage: React.FC = () => {
     fetchClients(page, limit, search, sortField, sortOrder);
     // Clear selections when filters or page change
     setSelectedClientIds(new Set());
-  }, [page, limit, search, sortField, sortOrder, filterRegion, filterRoute, filterType, filterOutletAccount]);
+  }, [page, limit, search, sortField, sortOrder, filterRegion, filterRoute]);
 
   const handlePrevPage = () => { if (page > 1) setPage(page - 1); };
   const handleNextPage = () => { if (page < totalPages) setPage(page + 1); };
@@ -776,6 +707,17 @@ const ClientsListPage: React.FC = () => {
     setLimit(Number(e.target.value));
     setPage(1);
   };
+
+  // Search as the user types, after a short pause
+  useEffect(() => {
+    const term = searchInput.trim();
+    if (term === search) return;
+    const timer = setTimeout(() => {
+      setPage(1);
+      setSearch(term);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput, search]);
 
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => setSearchInput(e.target.value);
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -792,8 +734,6 @@ const ClientsListPage: React.FC = () => {
   const handleResetFilters = () => {
     setFilterRegion('all');
     setFilterRoute('all');
-    setFilterType('all');
-    setFilterOutletAccount('all');
     setPage(1);
   };
 
@@ -865,7 +805,7 @@ const ClientsListPage: React.FC = () => {
       setEditClient(null);
       await fetchClients();
     } catch (err: any) {
-      setEditError(err.message || 'Failed to update client');
+      setEditError(err.response?.data?.message || err.message || 'Failed to update client');
     }
     setEditLoading(false);
   };
@@ -1013,14 +953,6 @@ const ClientsListPage: React.FC = () => {
               </>
             )}
 
-            <Link
-              to="/outlet-accounts"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              <Building2 className="h-3.5 w-3.5" />
-              Outlet Accounts
-            </Link>
-
             <button
               onClick={() => window.open('/clients-map', '_blank')}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
@@ -1074,9 +1006,9 @@ const ClientsListPage: React.FC = () => {
             >
               <Filter className="w-3.5 h-3.5" />
               Filters
-              {(filterRegion !== 'all' || filterRoute !== 'all' || filterType !== 'all' || filterOutletAccount !== 'all') && (
+              {(filterRegion !== 'all' || filterRoute !== 'all') && (
                 <span className="ml-1 px-1.5 py-0.5 bg-green-600 text-white rounded-full text-[10px]">
-                  {[filterRegion !== 'all', filterRoute !== 'all', filterType !== 'all', filterOutletAccount !== 'all'].filter(Boolean).length}
+                  {[filterRegion !== 'all', filterRoute !== 'all'].filter(Boolean).length}
                 </span>
               )}
             </button>
@@ -1133,10 +1065,9 @@ const ClientsListPage: React.FC = () => {
                     </th>
                     <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Account Number</th>
                     <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Client</th>
+                    <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Contact</th>
                     <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Region</th>
-                    <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Route</th>
-                    <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                    <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Outlet Account</th>
                     <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Geo-Location</th>
                     <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
@@ -1171,16 +1102,13 @@ const ClientsListPage: React.FC = () => {
                         <div className="text-xs font-medium text-gray-900">{client.name}</div>
                       </td>
                       <td className="px-4 py-2">
+                        <div className="text-xs text-gray-900 break-all">{client.email || '-'}</div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="text-xs text-gray-900 whitespace-nowrap">{client.contact || '-'}</div>
+                      </td>
+                      <td className="px-4 py-2">
                         <div className="text-xs text-gray-900">{client.region_name || client.region || 'No region'}</div>
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="text-xs text-gray-900">{client.route_name || client.route_name_update || 'No route'}</div>
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className="text-xs text-gray-900">{client.client_type_name || 'Not assigned'}</span>
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className="text-xs text-gray-900">{client.outlet_account_name || 'Not assigned'}</span>
                       </td>
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2">
@@ -1252,6 +1180,16 @@ const ClientsListPage: React.FC = () => {
                           </span>
                         ) : (
                           <div className="flex items-center gap-1.5">
+                            {canViewLedger && (
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/customers/${client.id}/ledger`)}
+                                className="rounded p-1 text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                                title="View client ledger"
+                              >
+                                <BookOpen className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => handleEditClick(client)}
@@ -1276,7 +1214,7 @@ const ClientsListPage: React.FC = () => {
                   })}
                   {clients.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="px-4 py-8 text-center">
+                      <td colSpan={8} className="px-4 py-8 text-center">
                         <Users className="h-8 w-8 text-gray-400 mx-auto mb-3" />
                         <h3 className="text-base font-medium text-gray-900 mb-1">No clients found</h3>
                         <p className="text-xs text-gray-600">
@@ -1380,6 +1318,29 @@ const ClientsListPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={editClient.email || ''}
+                    onChange={e => setEditClient({ ...editClient, email: e.target.value })}
+                    placeholder="client@example.com"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Contact</label>
+                  <input
+                    type="text"
+                    value={editClient.contact || ''}
+                    onChange={e => setEditClient({ ...editClient, contact: e.target.value })}
+                    placeholder="Phone number"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Region</label>
                   <select
                     value={editClient.region_id}
@@ -1425,35 +1386,6 @@ const ClientsListPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Client Type</label>
-                  <select
-                    value={editClient?.client_type ?? 0}
-                    onChange={e => setEditClient(ec => ec ? { ...ec, client_type: Number(e.target.value) } : ec)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                  >
-                    <option value={0}>Not assigned</option>
-                    {clientTypes.map(type => (
-                      <option key={type.id} value={type.id}>{type.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Outlet Account</label>
-                  <select
-                    value={editClient?.outlet_account ?? 0}
-                    onChange={e => setEditClient(ec => ec ? { ...ec, outlet_account: Number(e.target.value) } : ec)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
-                  >
-                    <option value={0}>Not assigned</option>
-                    {outletAccounts.map(account => (
-                      <option key={account.id} value={account.id}>{account.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
               {editError && <div className="text-red-600 text-sm bg-red-50 p-3 rounded-lg">{editError}</div>}
 
               <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100">
@@ -1483,16 +1415,10 @@ const ClientsListPage: React.FC = () => {
         onClose={() => setIsFilterModalOpen(false)}
         filterRegion={filterRegion}
         filterRoute={filterRoute}
-        filterType={filterType}
-        filterOutletAccount={filterOutletAccount}
         regions={allRegions}
         routes={allRoutes}
-        clientTypes={clientTypes}
-        outletAccounts={outletAccounts}
         onRegionChange={setFilterRegion}
         onRouteChange={setFilterRoute}
-        onTypeChange={setFilterType}
-        onOutletAccountChange={setFilterOutletAccount}
         onApplyFilters={handleApplyFilters}
         onResetFilters={handleResetFilters}
       />

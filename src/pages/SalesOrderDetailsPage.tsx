@@ -1,11 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { salesOrdersService } from '../services/financialService';
 import { SalesOrder } from '../types/financial';
 import axios from 'axios';
-import { FileText, X, CreditCard } from 'lucide-react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { FileText, X, CreditCard, ArrowLeft, Download } from 'lucide-react';
+import { exportElementToA4Pdf } from '../utils/pdfExport';
 import { useAuth } from '../contexts/AuthContext';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -38,6 +37,7 @@ interface PaymentAccount {
 const SalesOrderDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [salesOrder, setSalesOrder] = useState<SalesOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -314,20 +314,7 @@ const SalesOrderDetailsPage: React.FC = () => {
 
   const handleExportPDF = async () => {
     if (!invoiceRef.current) return;
-    const element = invoiceRef.current;
-    const canvas = await html2canvas(element, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgProps = pdf.getImageProperties(imgData);
-    // Use a narrower width for the PDF (80% of page width)
-    const pdfWidth = pageWidth * 0.8;
-    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-    // Center the image on the page
-    const xOffset = (pageWidth - pdfWidth) / 2;
-    pdf.addImage(imgData, 'PNG', xOffset, 0, pdfWidth, pdfHeight);
-    pdf.save(`invoice_${salesOrder?.so_number || id}.pdf`);
+    await exportElementToA4Pdf(invoiceRef.current, `invoice_${salesOrder?.so_number || id}.pdf`);
   };
 
   if (loading) {
@@ -362,6 +349,9 @@ const SalesOrderDetailsPage: React.FC = () => {
 
   if (!salesOrder) return null;
 
+  const invoiceYear = salesOrder.order_date ? new Date(salesOrder.order_date).getFullYear() : new Date().getFullYear();
+  const invoiceNumber = `INV/${invoiceYear}/${String(salesOrder.id).padStart(5, '0')}`;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -373,6 +363,29 @@ const SalesOrderDetailsPage: React.FC = () => {
             {successMsg}
           </div>
         )}
+        {/* Back / title / PDF */}
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ArrowLeft className="h-6 w-6" />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Invoice {invoiceNumber}</h1>
+              <p className="text-base text-gray-500">Order {salesOrder?.so_number}</p>
+            </div>
+          </div>
+          <button
+            onClick={handleExportPDF}
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center space-x-2"
+          >
+            <Download className="h-4 w-4" />
+            <span>Download PDF</span>
+          </button>
+        </div>
+
         {/* Export/Back buttons OUTSIDE the ref */}
         <div className="mb-6 flex items-center justify-between hidden">
           <div>
@@ -460,102 +473,119 @@ const SalesOrderDetailsPage: React.FC = () => {
         {/* Everything else INSIDE the ref */}
         <div ref={invoiceRef} className="a4-invoice-print m-2 relative">
           {/* Header Section */}
-          <div className="invoice-header mb-6">
+          <div className="invoice-header">
             <div className="flex justify-between items-start">
-              {/* Company Information */}
-               
-               
-              {/* Invoice Details */}
-              <div className="invoice-details text-left">
-                <h2 className="invoice-title">LPO</h2>
-                <div className="invoice-meta">
-                  <p><strong>LPO No:</strong> {salesOrder?.lpo_number || 'N/A'}</p>
-                  <p><strong>Date:</strong> {formatDate(salesOrder?.order_date || '')}</p>
-                  <p><strong>FMR:</strong> {salesOrder?.salesrep || salesOrder?.created_by_user?.full_name || 'N/A'}</p>
-                </div>
+              <img
+                src="/logo.jpg"
+                alt="Company Logo"
+                className="h-20 w-auto object-contain"
+                style={{ maxWidth: '120px' }}
+              />
+              <div className="text-right">
+                <h1 className="company-name">GNOMIS QUALITY PRODUCTS</h1>
+                <p className="company-address">P.O Box 15470, Nairobi Kenya</p>
+                <p className="company-tax">Pin P051904794X</p>
+              </div>
+            </div>
+
+            <div className="flex justify-end mt-4">
+              <div className="text-right">
+                <p className="customer-name">{salesOrder?.customer?.name || 'N/A'}</p>
               </div>
             </div>
           </div>
 
-          {/* Bill To Section */}
-          <div className="bill-to-section mb-6">
-            <div className="flex justify-between">
-              <div className="bill-to">
-                <h3 className="section-title">Outlet: </h3>
-                <p className="customer-name">{salesOrder?.customer?.name || 'N/A'}</p>
-                <p className="customer-address">{salesOrder?.customer?.route_name_update || 'N/A'}</p>
-                {/* <p className="customer-tax">Tax PIN: {salesOrder?.customer?.tax_pin || 'N/A'}</p> */}
+          {/* Title & Meta */}
+          <div className="invoice-title-section">
+            <h2 className="invoice-title">Invoice {invoiceNumber}</h2>
+            <div className="invoice-meta-row">
+              <div>
+                <p className="meta-label">LPO No:</p>
+                <p className="meta-value">{salesOrder?.lpo_number || 'N/A'}</p>
               </div>
-              
-               
+              <div>
+                <p className="meta-label">Date:</p>
+                <p className="meta-value">{formatDate(salesOrder?.order_date || '')}</p>
+              </div>
+              <div>
+                <p className="meta-label">FMR:</p>
+                <p className="meta-value">{salesOrder?.salesrep || salesOrder?.created_by_user?.full_name || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="meta-label">Source:</p>
+                <p className="meta-value">{salesOrder?.so_number}</p>
+              </div>
             </div>
           </div>
 
           {/* Items Table */}
-          <div className="items-section mb-6">
+          <div className="items-section">
             {salesOrder?.items && salesOrder.items.length > 0 ? (
               <table className="invoice-table">
                 <thead>
                   <tr>
-                    <th className="item-col">Item</th>
-                    <th className="qty-col">Qty</th>
-                    <th className="price-col">Unit Price</th>
-                    <th className="price-col">Price</th>
-                    <th className="tax-col">Tax</th>
-                    <th className="total-col">Total</th>
+                    <th className="desc-col">DESCRIPTION</th>
+                    <th className="qty-col">QUANTITY</th>
+                    <th className="price-col">UNIT PRICE</th>
+                    <th className="tax-col">TAXES</th>
+                    <th className="amount-col">AMOUNT</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {salesOrder.items.map((item) => (
-                    <tr key={item.id}>
-                      <td className="item-col">{item.product?.product_name || 'N/A'}</td>
-                      <td className="qty-col">{item.quantity}</td>
-                      <td className="price-col">
-                        {formatCurrency((item.total_price - (item.tax_amount || 0)) / item.quantity)}
-                      </td>
-                      <td className="price-col">
-                        {formatCurrency((item.total_price - (item.tax_amount || 0)))}
-                      </td>
-                      <td className="tax-col">{formatCurrency(item.tax_amount || 0)}</td>
-                      <td className="total-col">{formatCurrency(item.total_price)}</td>
-                    </tr>
-                  ))}
+                  {salesOrder.items.map((item) => {
+                    const taxAmt = Number(item.tax_amount) || 0;
+                    const qty = Number(item.quantity) || 0;
+                    return (
+                      <tr key={item.id}>
+                        <td className="desc-col">{item.product?.product_name || 'N/A'}</td>
+                        <td className="qty-col">{qty.toFixed(2)}</td>
+                        {/* VAT-inclusive unit price (LPO price) so quantity x price = amount */}
+                        <td className="price-col">{formatCurrency(qty ? Number(item.total_price) / qty : 0)}</td>
+                        <td className="tax-col">{taxAmt > 0 ? 'Sales VAT (16%)' : 'Sales VAT Zero Rated'}</td>
+                        <td className="amount-col">{formatCurrency(Number(item.total_price))} KSh</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             ) : (
-              <p className="text-gray-500">No items found for this sales order.</p>
+              <div className="text-center py-8">
+                <p className="text-gray-500">No items found for this sales order.</p>
+              </div>
             )}
           </div>
 
           {/* Totals Section */}
           <div className="totals-section">
-            <div className="flex justify-end">
+            <div className="flex justify-between items-start">
+              <p className="payment-communication">Order: <strong>{salesOrder?.so_number}</strong></p>
               <table className="totals-table">
                 <tbody>
                   <tr>
-                    <td className="label">Subtotal:</td>
-                    <td className="amount">{formatCurrency((salesOrder?.total_amount || 0) - (salesOrder?.tax_amount || 0))}</td>
+                    <td className="label">Untaxed Amount</td>
+                    <td className="amount">{formatCurrency(Number(salesOrder?.total_amount || 0) - Number(salesOrder?.tax_amount || 0))} KSh</td>
                   </tr>
                   <tr>
-                    <td className="label">VAT (16%):</td>
-                    <td className="amount">{formatCurrency(salesOrder?.tax_amount || 0)}</td>
+                    <td className="label">VAT 16%</td>
+                    <td className="amount">{formatCurrency(Number(salesOrder?.tax_amount || 0))} KSh</td>
                   </tr>
                   <tr className="total-row">
-                    <td className="label">Total:</td>
-                    <td className="amount">{formatCurrency(salesOrder?.total_amount || 0)}</td>
+                    <td className="label">Total</td>
+                    <td className="amount">{formatCurrency(Number(salesOrder?.total_amount || 0))} KSh</td>
                   </tr>
                   <tr>
-                    <td className="label">Amount Paid:</td>
-                    <td className="amount">{loadingAmountPaid ? 'Loading...' : formatCurrency(amountPaid)}</td>
+                    <td className="label">Amount Paid</td>
+                    <td className="amount">{loadingAmountPaid ? 'Loading...' : `${formatCurrency(Number(amountPaid))} KSh`}</td>
                   </tr>
                   <tr className="balance-due-row">
-                    <td className="label">Balance Due:</td>
-                    <td className="amount">{loadingAmountPaid ? 'Loading...' : formatCurrency((salesOrder?.total_amount || 0) - amountPaid)}</td>
+                    <td className="label">Balance Due</td>
+                    <td className="amount">{loadingAmountPaid ? 'Loading...' : `${formatCurrency(Number(salesOrder?.total_amount || 0) - Number(amountPaid))} KSh`}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </div>
+
 
           {/* Journal Entries Modal */}
           {showJournalModal && (
@@ -768,33 +798,196 @@ const SalesOrderDetailsPage: React.FC = () => {
           )}
         </div>
       </div>
+      <style>{`
+        .a4-invoice-print {
+          width: 210mm;
+          background: #fff;
+          margin: 0 auto;
+          padding: 20mm 15mm;
+          box-sizing: border-box;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .invoice-header {
+          border-bottom: 2px solid #e5e7eb;
+          padding-bottom: 15px;
+          margin-bottom: 15px;
+        }
+
+        .company-name {
+          font-size: 14px;
+          font-weight: bold;
+          color: #1f2937;
+          margin-bottom: 4px;
+        }
+
+        .company-address, .company-tax {
+          color: #6b7280;
+          margin-bottom: 2px;
+          font-size: 10px;
+        }
+
+        .customer-name {
+          font-weight: bold;
+          color: #1f2937;
+          margin-bottom: 2px;
+          font-size: 11px;
+        }
+
+        .customer-address {
+          color: #6b7280;
+          margin-bottom: 2px;
+          font-size: 10px;
+        }
+
+        .customer-tax {
+          color: #6b7280;
+          font-size: 10px;
+        }
+
+        .invoice-title-section {
+          margin-bottom: 15px;
+        }
+
+        .invoice-title {
+          font-size: 20px;
+          font-weight: bold;
+          color: #1f2937;
+          margin-bottom: 10px;
+        }
+
+        .invoice-meta-row {
+          display: flex;
+          gap: 40px;
+        }
+
+        .meta-label {
+          font-size: 10px;
+          font-weight: bold;
+          color: #374151;
+          margin-bottom: 2px;
+        }
+
+        .meta-value {
+          font-size: 10px;
+          color: #6b7280;
+        }
+
+        .invoice-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 15px;
+        }
+
+        .invoice-table th {
+          background: #f9fafb;
+          border: 1px solid #e5e7eb;
+          padding: 6px 6px;
+          text-align: left;
+          font-weight: bold;
+          color: #374151;
+          font-size: 9px;
+        }
+
+        .invoice-table td {
+          border: 1px solid #e5e7eb;
+          padding: 6px 6px;
+          color: #374151;
+          font-size: 9px;
+        }
+
+        .desc-col { width: 38%; }
+        .qty-col { width: 12%; text-align: right; }
+        .price-col { width: 15%; text-align: right; }
+        .tax-col { width: 20%; }
+        .amount-col { width: 15%; text-align: right; }
+
+        .totals-section {
+          margin-top: 10px;
+        }
+
+        .payment-communication {
+          font-size: 9px;
+          color: #6b7280;
+          margin-top: auto;
+        }
+
+        .totals-table {
+          border-collapse: collapse;
+          min-width: 260px;
+        }
+
+        .totals-table td {
+          padding: 4px 8px;
+          border: 1px solid #e5e7eb;
+          font-size: 9px;
+        }
+
+        .totals-table .label {
+          text-align: left;
+          color: #374151;
+        }
+
+        .totals-table .amount {
+          text-align: right;
+          color: #1f2937;
+        }
+
+        .total-row td {
+          background: #374151;
+          color: #fff !important;
+          font-weight: bold;
+          font-size: 10px;
+        }
+
+        .amount-words {
+          text-align: right;
+          font-size: 9px;
+          color: #6b7280;
+          margin-top: 6px;
+        }
+
+        .invoice-footer {
+          width: 100%;
+          padding: 15px 0 0 0;
+          border-top: 2px solid #e5e7eb;
+          margin-top: 25px;
+          text-align: center;
+        }
+
+        .invoice-footer p {
+          color: #6b7280;
+          margin-bottom: 3px;
+          font-size: 8px;
+        }
+
+        .strictly-note {
+          font-weight: bold;
+          margin-top: 6px;
+        }
+
+        @media print {
+          body { background: #fff !important; }
+          .a4-invoice-print {
+            box-shadow: none !important;
+            width: 210mm !important;
+            margin: 0 !important;
+            padding: 15mm !important;
+          }
+          .a4-invoice-print table { table-layout: fixed; width: 100%; }
+          .a4-invoice-print th, .a4-invoice-print td {
+            word-break: break-word;
+            overflow-wrap: break-word;
+            padding: 2px 4px;
+            font-size: 8px;
+          }
+          .a4-invoice-print tr, .a4-invoice-print table { page-break-inside: avoid; }
+        }
+      
+        .balance-due-row td { font-weight: bold; background: #f3f4f6; }
+      `}</style>
     </div>
   );
 };
 
 export default SalesOrderDetailsPage;
-
-<style>{`
-  .a4-invoice-print {
-    width: 1200px;
-    min-height: 1123px;
-    background: #fff;
-    margin: 0 auto;
-    padding: 16px 12px;
-    box-sizing: border-box;
-    position: relative;
-  }
-  .invoice-footer {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-  }
-  @media print {
-    body { background: #fff !important; }
-    .a4-invoice-print { box-shadow: none !important; }
-    .a4-invoice-print table { table-layout: fixed; width: 100%; }
-    .a4-invoice-print th, .a4-invoice-print td { word-break: break-word; overflow-wrap: break-word; padding: 4px 6px; font-size: 12px; }
-    .a4-invoice-print tr, .a4-invoice-print table { page-break-inside: avoid; }
-  }
-`}</style> 

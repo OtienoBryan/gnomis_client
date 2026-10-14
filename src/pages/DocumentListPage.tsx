@@ -103,6 +103,19 @@ const DocumentListPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   
+  // Edit document state
+  const [editDoc, setEditDoc] = useState<Document | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editStartDate, setEditStartDate] = useState('');
+  const [editEndDate, setEditEndDate] = useState('');
+  const [editFolderId, setEditFolderId] = useState('');
+  const [editFile, setEditFile] = useState<File | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [folderOptions, setFolderOptions] = useState<{ id: number; label: string }[]>([]);
+
   // Folder management state
   const [folders, setFolders] = useState<DocumentFolder[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<number | null>(null);
@@ -481,6 +494,90 @@ const DocumentListPage: React.FC = () => {
     }
   };
 
+  // Builds "Parent / Child" labels for every folder so a document can be moved anywhere
+  const loadFolderOptions = async () => {
+    try {
+      const res = await fetchWithAuth('/api/document-folders');
+      if (!res.ok) throw new Error('Failed to load folders');
+      const all: DocumentFolder[] = await res.json();
+      const byId = new Map(all.map((f) => [f.id, f]));
+      const labelFor = (f: DocumentFolder): string => {
+        const parts: string[] = [];
+        let cur: DocumentFolder | undefined = f;
+        const seen = new Set<number>();
+        while (cur && !seen.has(cur.id)) {
+          seen.add(cur.id);
+          parts.unshift(cur.name);
+          cur = cur.parent_folder_id != null ? byId.get(cur.parent_folder_id) : undefined;
+        }
+        return parts.join(' / ');
+      };
+      setFolderOptions(all.map((f) => ({ id: f.id, label: labelFor(f) })).sort((a, b) => a.label.localeCompare(b.label)));
+    } catch (err) {
+      console.error('Error loading folders for edit:', err);
+      setFolderOptions([]);
+    }
+  };
+
+  const openEditModal = (doc: Document) => {
+    setEditDoc(doc);
+    setEditTitle(doc.title || '');
+    setEditCategory(doc.category || '');
+    setEditDescription(doc.description || '');
+    setEditStartDate(doc.start_date ? String(doc.start_date).slice(0, 10) : '');
+    setEditEndDate(doc.end_date ? String(doc.end_date).slice(0, 10) : '');
+    setEditFolderId(doc.parent_folder_id != null ? String(doc.parent_folder_id) : '');
+    setEditFile(null);
+    setEditError(null);
+    setSuccess(null);
+    setError(null);
+    loadFolderOptions();
+  };
+
+  const closeEditModal = () => {
+    if (editLoading) return;
+    setEditDoc(null);
+    setEditFile(null);
+    setEditError(null);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editDoc) return;
+    if (!editTitle.trim() || !editCategory) {
+      setEditError('Title and category are required.');
+      return;
+    }
+    if (editStartDate && editEndDate && editEndDate < editStartDate) {
+      setEditError('The expiry date cannot be before the start date.');
+      return;
+    }
+    setEditLoading(true);
+    setEditError(null);
+    const formData = new FormData();
+    formData.append('title', editTitle.trim());
+    formData.append('category', editCategory);
+    formData.append('description', editDescription);
+    formData.append('start_date', editStartDate);
+    formData.append('end_date', editEndDate);
+    formData.append('parent_folder_id', editFolderId);
+    if (editFile) formData.append('file', editFile);
+
+    try {
+      const res = await fetchWithAuth(`/api/documents/${editDoc.id}`, { method: 'PUT', body: formData });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Failed to update document');
+      setEditDoc(null);
+      setEditFile(null);
+      setSuccess('Document updated successfully!');
+      fetchDocuments(currentFolderId); // a document moved to another folder drops out of this view
+    } catch (err: any) {
+      setEditError(err.message || 'Failed to update document');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   const handleDeleteDocument = async (id: number) => {
     if (!confirm('Are you sure you want to delete this document?')) return;
     
@@ -699,7 +796,7 @@ const DocumentListPage: React.FC = () => {
       <div className="min-h-screen bg-gray-50">
         {/* Loading Header */}
         <div className="bg-white shadow-sm border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="w-full px-4 sm:px-6 lg:px-8">
             <div className="py-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -712,7 +809,7 @@ const DocumentListPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
           {/* Loading Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             {[1, 2, 3, 4].map((i) => (
@@ -745,7 +842,7 @@ const DocumentListPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Modern Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="py-3">
             <div className="flex items-center justify-between">
               <div>
@@ -804,7 +901,7 @@ const DocumentListPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
         {/* Breadcrumb Navigation */}
         {(currentFolderId !== null || folderPath.length > 0) && (
           <div className="bg-white rounded-lg shadow mb-4 px-4 py-3">
@@ -1241,6 +1338,13 @@ const DocumentListPage: React.FC = () => {
                             <Icons.Download />
                           </a>
                           <button
+                            onClick={() => openEditModal(doc)}
+                            className="text-blue-600 hover:text-blue-900 p-0.5 rounded"
+                            title="Edit"
+                          >
+                            <Icons.Edit />
+                          </button>
+                          <button
                             onClick={() => handleDeleteDocument(doc.id)}
                             className="text-red-600 hover:text-red-900 p-0.5 rounded"
                             title="Delete"
@@ -1373,6 +1477,156 @@ const DocumentListPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Edit Document Modal */}
+      {editDoc && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-screen overflow-y-auto">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">Edit Document</h3>
+                <p className="text-xs text-gray-500 mt-1">Update the details, move it, or replace the file</p>
+              </div>
+              <button
+                onClick={closeEditModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                disabled={editLoading}
+              >
+                <Icons.X />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="px-4 py-4 space-y-4">
+              {editError && (
+                <div className="p-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">{editError}</div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="block w-full px-2 py-1 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-xs"
+                  disabled={editLoading}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                    Category <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    className="block w-full px-2 py-1 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-xs"
+                    disabled={editLoading}
+                  >
+                    <option value="">Select category</option>
+                    {/* keep the document's current category selectable even if it was deactivated */}
+                    {editCategory && !(Array.isArray(categories) ? categories : []).some((c) => c.name === editCategory) && (
+                      <option value={editCategory}>{editCategory}</option>
+                    )}
+                    {(Array.isArray(categories) ? categories : []).map((cat) => (
+                      <option key={cat.id} value={cat.name}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Folder</label>
+                  <select
+                    value={editFolderId}
+                    onChange={(e) => setEditFolderId(e.target.value)}
+                    className="block w-full px-2 py-1 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-xs"
+                    disabled={editLoading}
+                  >
+                    <option value="">Root (no folder)</option>
+                    {folderOptions.map((f) => (
+                      <option key={f.id} value={f.id}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Start date</label>
+                  <input
+                    type="date"
+                    value={editStartDate}
+                    onChange={(e) => setEditStartDate(e.target.value)}
+                    className="block w-full px-2 py-1 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-xs"
+                    disabled={editLoading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                    Expiry date <span className="text-gray-400">(optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={editEndDate}
+                    onChange={(e) => setEditEndDate(e.target.value)}
+                    className="block w-full px-2 py-1 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-xs"
+                    disabled={editLoading}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">Description</label>
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  rows={3}
+                  className="block w-full px-2 py-1 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-xs"
+                  disabled={editLoading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  Replace file <span className="text-gray-400">(optional)</span>
+                </label>
+                <input
+                  type="file"
+                  onChange={(e) => setEditFile(e.target.files?.[0] || null)}
+                  className="block w-full text-xs text-gray-700"
+                  disabled={editLoading}
+                />
+                <p className="mt-1 text-[10px] text-gray-500">
+                  Current file:{' '}
+                  <a href={editDoc.file_url} target="_blank" rel="noopener noreferrer" className="text-red-600 hover:underline">
+                    open
+                  </a>
+                  . Leave empty to keep it.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={closeEditModal}
+                  disabled={editLoading}
+                  className="px-3 py-1.5 text-xs rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editLoading}
+                  className="px-3 py-1.5 text-xs rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                >
+                  {editLoading ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Enhanced Upload Modal */}
       {showModal && (

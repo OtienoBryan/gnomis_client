@@ -417,6 +417,9 @@ const ReturnsPage: React.FC = () => {
                     Order Date
                   </th>
                   <th className="px-6 py-3 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                    Image
+                  </th>
+                  <th className="px-6 py-3 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
@@ -424,7 +427,7 @@ const ReturnsPage: React.FC = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredReturns.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                       <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                       <p className="text-sm font-medium text-gray-900 mb-2">No returns found</p>
                       <p className="text-xs text-gray-600">
@@ -455,6 +458,28 @@ const ReturnsPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-900">
                         {formatDate(returnItem.order_date)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-xs">
+                        {returnItem.photo_url ? (
+                          <a
+                            href={returnItem.photo_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Open full image"
+                          >
+                            <img
+                              src={returnItem.photo_url}
+                              alt={`Return ${returnItem.so_number}`}
+                              className="h-10 w-10 object-cover rounded border border-gray-200 hover:opacity-80"
+                              loading="lazy"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-xs font-medium">
                         <button

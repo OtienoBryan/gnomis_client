@@ -695,12 +695,6 @@ const SosReportPage: React.FC = () => {
                       <th className="px-3 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                         SOS (%)
                       </th>
-                      <th className="px-3 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                        Outlet Target (%)
-                      </th>
-                      <th className="px-3 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">
-                        Variance (pp)
-                      </th>
                       <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
@@ -768,37 +762,6 @@ const SosReportPage: React.FC = () => {
                               {formatPercent(report.sos)}
                             </span>
                           </div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-right">
-                          <div className="inline-flex items-center justify-end gap-1">
-                            <Percent className="h-3 w-3 text-red-400" />
-                            <span className="text-[10px] font-medium text-gray-900">
-                              {formatPercent(report.outlet_target)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-right">
-                          {(() => {
-                            const sosVal = Number(report.sos || 0);
-                            const targetVal = Number(report.outlet_target || 0);
-                            const variance = targetVal - sosVal;
-                            const formatted = variance.toFixed(2);
-                            const positive = variance > 0;
-                            const negative = variance < 0;
-                            return (
-                              <span
-                                className={`text-[10px] font-medium ${
-                                  positive
-                                    ? 'text-green-600'
-                                    : negative
-                                    ? 'text-red-600'
-                                    : 'text-gray-900'
-                                }`}
-                              >
-                                {formatted}
-                              </span>
-                            );
-                          })()}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           {(() => {

@@ -15,7 +15,8 @@ import {
   BarChart3,
   Layout,
   Search,
-  Megaphone
+  Megaphone,
+  RotateCcw
 } from 'lucide-react';
 
 interface VisitLink {
@@ -27,13 +28,15 @@ interface VisitLink {
   iconBg: string;
   iconText: string;
   features: string[];
+  // hidden cards stay defined here but are not shown (flip to false to bring one back)
+  hidden?: boolean;
 }
 
 const VisitsIndexPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
 
-  const visits: VisitLink[] = [
+  const allVisits: VisitLink[] = [
     {
       id: 'my-visibility',
       title: 'My Visibility',
@@ -102,7 +105,25 @@ const VisitsIndexPage: React.FC = () => {
       ]
     },
     {
+      id: 'returns',
+      title: 'Returns',
+      description: 'Review products returned from outlets, with return reasons, item details and photos.',
+      path: '/returns',
+      icon: <RotateCcw className="w-4 h-4" />,
+      iconBg: 'bg-orange-50',
+      iconText: 'text-orange-600',
+      features: [
+        'Returned items and quantities',
+        'Return reasons',
+        'Return photo preview',
+        'Region and outlet account filters',
+        'Date range selection',
+        'Search by SO number and client'
+      ]
+    },
+    {
       id: 'price-compliance-report',
+      hidden: true,
       title: 'Price Compliance Report',
       description: 'Monitor pricing compliance, RRP vs shelf price, and promotional pricing across outlets.',
       path: '/price-compliance-report',
@@ -171,6 +192,7 @@ const VisitsIndexPage: React.FC = () => {
     },
     {
       id: 'promotions-report',
+      hidden: true,
       title: 'Promotions Report',
       description: 'Track promotion activations such as Price off, Sampling, and BOGO from field visits.',
       path: '/promotions-report',
@@ -233,6 +255,8 @@ const VisitsIndexPage: React.FC = () => {
       ]
     }
   ];
+
+  const visits = allVisits.filter((visit) => !visit.hidden);
 
   const handleVisitClick = (path: string) => {
     navigate(path);

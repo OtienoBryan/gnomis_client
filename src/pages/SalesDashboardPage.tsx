@@ -9,7 +9,7 @@ import {
   TrendingUpIcon, UsersIcon, ShoppingCartIcon,
   BarChart3Icon, CalendarIcon, MapPinIcon, FileTextIcon,
   X, ChevronRightIcon, ClipboardListIcon, ActivityIcon,
-  CheckCircle2Icon, AlertCircleIcon, ArrowUpRightIcon, RotateCcwIcon,
+  CheckCircle2Icon, AlertCircleIcon, ArrowUpRightIcon, PiggyBankIcon,
 } from 'lucide-react';
 
 /* ──────────────────────────── StatCard ──────────────────────────── */
@@ -136,7 +136,6 @@ const SalesDashboardPage: React.FC = () => {
   const [newOrdersCount, setNewOrdersCount] = useState(0);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [pendingCollectionsCount, setPendingCollectionsCount] = useState(0);
-  const [pendingExpensesCount, setPendingExpensesCount] = useState(0);
   const [lowRawMaterialsCount, setLowRawMaterialsCount] = useState(0);
   const [belowTargetProductsCount, setBelowTargetProductsCount] = useState(0);
   const [outletsVisited, setOutletsVisited] = useState<{ month: string; outlets: number }[]>([]);
@@ -215,10 +214,6 @@ const SalesDashboardPage: React.FC = () => {
     fetchData('/financial/raw-material-requests', { status: 'pending' })
       .then(res => setPendingRequestsCount(Array.isArray(res.data) ? res.data.length : 0))
       .catch(() => {});
-    // Staff expenses waiting for review
-    fetchData('/financial/staff-expenses', { status: 'Pending' })
-      .then(res => setPendingExpensesCount(Array.isArray(res.data) ? res.data.length : 0))
-      .catch(() => {});
     // Payment collections waiting for review
     fetchData('/financial/payment-collections', { status: 'Pending' })
       .then(res => setPendingCollectionsCount(Array.isArray(res.data) ? res.data.length : 0))
@@ -290,9 +285,9 @@ const SalesDashboardPage: React.FC = () => {
       items: [
         { to: '/sales-reps', label: 'Staff', icon: <UsersIcon className="h-4 w-4" />, color: 'bg-white text-red-700 border-gray-300 hover:bg-red-50' },
         { to: '/staff-location', label: 'Staff Location', icon: <MapPinIcon className="h-4 w-4" />, color: 'bg-white text-pink-700 border-gray-300 hover:bg-pink-50' },
-        { to: '/staff-expenses', label: 'Staff Expenses', icon: <ShoppingCartIcon className="h-4 w-4" />, color: 'bg-white text-orange-700 border-gray-300 hover:bg-orange-50', badge: pendingExpensesCount },
+        { to: '/petty-cash/balances', label: 'Staff Petty Cash', icon: <PiggyBankIcon className="h-4 w-4" />, color: 'bg-white text-green-700 border-gray-300 hover:bg-green-50' },
         { to: '/payment-collections', label: 'Payment Collections', icon: <FileTextIcon className="h-4 w-4" />, color: 'bg-white text-emerald-700 border-gray-300 hover:bg-emerald-50', badge: pendingCollectionsCount },
-        { to: '/activity', label: 'Activity', icon: <ActivityIcon className="h-4 w-4" />, color: 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50' },
+        { to: '/activity', label: 'Sales Rep Activity', icon: <ActivityIcon className="h-4 w-4" />, color: 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50' },
         { to: '/dashboard/route-compliance', label: 'Sales Rep Compliance', icon: <CheckCircle2Icon className="h-4 w-4" />, color: 'bg-white text-lime-700 border-gray-300 hover:bg-lime-50' },
         { to: '/sales-rep-leaves', label: 'Sales Rep Leaves', icon: <CalendarIcon className="h-4 w-4" />, color: 'bg-white text-green-700 border-gray-300 hover:bg-green-50', badge: pendingLeavesCount },
         { to: '/sales-rep-working-days', label: 'Working Days', icon: <ClipboardListIcon className="h-4 w-4" />, color: 'bg-white text-sky-700 border-gray-300 hover:bg-sky-50' },
@@ -330,13 +325,12 @@ const SalesDashboardPage: React.FC = () => {
         //{ to: '/dashboard/reports/product-performance', label: 'Product Perf.', icon: <PieChartIcon className="h-4 w-4" />, color: 'bg-white text-cyan-700 border-gray-300 hover:bg-cyan-50' },
         { to: '/van-sales', label: 'Van Sales', icon: <ShoppingCartIcon className="h-4 w-4" />, color: 'bg-white text-green-700 border-gray-300 hover:bg-green-50' },
         { to: '/financial/customer-orders', label: 'Orders Report', icon: <FileTextIcon className="h-4 w-4" />, color: 'bg-white text-red-700 border-gray-300 hover:bg-red-50', badge: newOrdersCount },
-        { to: '/returns', label: 'Product Returns', icon: <RotateCcwIcon className="h-4 w-4" />, color: 'bg-white text-orange-700 border-gray-300 hover:bg-orange-50' },
-        { to: '/non-supplies', label: 'Non Supplies', icon: <RotateCcwIcon className="h-4 w-4" />, color: 'bg-white text-red-700 border-gray-300 hover:bg-red-50' },
         { to: '/notices', label: 'Notices', icon: <FileTextIcon className="h-4 w-4" />, color: 'bg-white text-yellow-700 border-gray-300 hover:bg-yellow-50' },
+        { to: '/document-list', label: 'Documents', icon: <FileTextIcon className="h-4 w-4" />, color: 'bg-white text-amber-700 border-gray-300 hover:bg-amber-50' },
         { to: '/visits', label: 'Visit Reports', icon: <MapPinIcon className="h-4 w-4" />, color: 'bg-white text-teal-700 border-gray-300 hover:bg-teal-50' },
       ],
     },
-  ], [pendingLeavesCount, newOrdersCount, pendingRequestsCount, lowRawMaterialsCount, belowTargetProductsCount, pendingCollectionsCount, pendingExpensesCount]);
+  ], [pendingLeavesCount, newOrdersCount, pendingRequestsCount, lowRawMaterialsCount, belowTargetProductsCount, pendingCollectionsCount]);
 
 
   const checkedInPct = stats.totalActiveReps > 0

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Download, AlertCircle } from 'lucide-react';
 import { salesOrdersService } from '../services/financialService';
 import { SalesOrder, SalesOrderItem } from '../types/financial';
+import { exportElementToA4Pdf } from '../utils/pdfExport';
 
 const ONES = [
   '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
@@ -82,23 +83,18 @@ const InvoiceViewPage: React.FC = () => {
 
   const handleBack = () => navigate('/financial/customer-orders');
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     const element = document.querySelector('.a4-invoice-print') as HTMLElement;
     if (!element) return;
     setGeneratingPdf(true);
-    const opt = {
-      margin: 0,
-      filename: `invoice-${invoiceNumber}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
-    };
-    import('html2pdf.js').then((html2pdf) => {
-      html2pdf.default().set(opt).from(element).save().then(() => setGeneratingPdf(false)).catch(() => setGeneratingPdf(false));
-    }).catch(() => {
-      setGeneratingPdf(false);
+    try {
+      await exportElementToA4Pdf(element, `invoice-${invoiceNumber.replace(/\//g, '-')}.pdf`);
+    } catch (err) {
+      console.error('PDF export failed, falling back to print:', err);
       window.print();
-    });
+    } finally {
+      setGeneratingPdf(false);
+    }
   };
 
   if (loading) {
@@ -140,17 +136,12 @@ const InvoiceViewPage: React.FC = () => {
   const taxedBase = items
     .filter((i) => (i as any).tax_type === '16%')
     .reduce((sum, i) => sum + (Number((i as any).net_price) || 0), 0);
-  const untaxedBase = items
-    .filter((i) => (i as any).tax_type !== '16%')
-    .reduce((sum, i) => sum + (Number((i as any).net_price) || 0), 0);
-  const rounding = +(totalAmount - (subtotal + taxAmount)).toFixed(2);
 
   const invoiceYear = order.order_date ? new Date(order.order_date).getFullYear() : new Date().getFullYear();
   const invoiceNumber = `INV/${invoiceYear}/${String(order.id).padStart(5, '0')}`;
 
   const customer: any = order.customer || {};
   const customerName = order.customer_name || customer.name || 'N/A';
-  const customerAddress = customer.address || '';
   const customerContact = customer.contact || customer.phone || '';
   const customerTaxPin = customer.tax_pin || '';
 
@@ -212,9 +203,7 @@ const InvoiceViewPage: React.FC = () => {
             <div className="flex justify-end mt-4">
               <div className="text-right">
                 <p className="customer-name">{customerName}</p>
-                {customerAddress && <p className="customer-address">{customerAddress}</p>}
                 {customerContact && <p className="customer-address">{customerContact}</p>}
-                {order.country_name && <p className="customer-address">{order.country_name}</p>}
                 {customerTaxPin && <p className="customer-tax">Tax ID: {customerTaxPin}</p>}
               </div>
             </div>
@@ -248,20 +237,22 @@ const InvoiceViewPage: React.FC = () => {
                     <th className="desc-col">DESCRIPTION</th>
                     <th className="qty-col">QUANTITY</th>
                     <th className="price-col">UNIT PRICE</th>
-                    <th className="tax-col">TAXES</th>
+                    <th className="tax-col">VAT</th>
                     <th className="amount-col">AMOUNT</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item, index) => {
-                    const taxType = (item as any).tax_type;
                     const description = item.product_name || `Product ${item.product_id}`;
                     return (
                       <tr key={index}>
                         <td className="desc-col">{description}</td>
                         <td className="qty-col">{Number(item.quantity).toFixed(2)}</td>
-                        <td className="price-col">{formatCurrency(Number(item.unit_price))}</td>
-                        <td className="tax-col">{taxType === '16%' ? 'Sales VAT (16%)' : 'Sales VAT Zero Rated'}</td>
+                        {/* VAT-inclusive unit price (LPO price) so quantity x price = amount */}
+                        <td className="price-col">
+                          {formatCurrency(Number(item.quantity) ? Number(item.total_price) / Number(item.quantity) : 0)}
+                        </td>
+                        <td className="tax-col">{formatCurrency(Number(item.tax_amount) || 0)}</td>
                         <td className="amount-col">{formatCurrency(Number(item.total_price))} KSh</td>
                       </tr>
                     );
@@ -289,14 +280,6 @@ const InvoiceViewPage: React.FC = () => {
                     <td className="label">VAT 16% on {formatCurrency(taxedBase)} KSh</td>
                     <td className="amount">{formatCurrency(taxAmount)} KSh</td>
                   </tr>
-                  <tr>
-                    <td className="label">VAT 0% on {formatCurrency(untaxedBase)} KSh</td>
-                    <td className="amount">0.00 KSh</td>
-                  </tr>
-                  <tr>
-                    <td className="label">Rounding</td>
-                    <td className="amount">{rounding >= 0 ? '' : '-'}{formatCurrency(Math.abs(rounding))} KSh</td>
-                  </tr>
                   <tr className="total-row">
                     <td className="label">Total</td>
                     <td className="amount">{formatCurrency(totalAmount)} KSh</td>
@@ -309,17 +292,6 @@ const InvoiceViewPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Footer */}
-          <div className="invoice-footer">
-            <p>Bank Transfer/ Cheque/ Mpesa</p>
-            <p>
-              Account Name: Moonsun Trade International Ltd. Bank: Diamond Trust Bank. Branch: Westgate. Branch Code: 006. Swift:
-              DTKEKENA. KES A/C: 0035504001. USD A/C: 0035504002
-            </p>
-            <p>Mpesa Paybill: 516600</p>
-            <p>Account No: 946057#Invoice No or Name</p>
-            <p className="strictly-note">Strictly No Cash Payments</p>
-          </div>
         </div>
       </div>
 
@@ -424,7 +396,7 @@ const InvoiceViewPage: React.FC = () => {
         .desc-col { width: 38%; }
         .qty-col { width: 12%; text-align: right; }
         .price-col { width: 15%; text-align: right; }
-        .tax-col { width: 20%; }
+        .tax-col { width: 20%; text-align: right; }
         .amount-col { width: 15%; text-align: right; }
 
         .totals-section {

@@ -67,6 +67,9 @@ import GeneralLedgerReportPage from './pages/GeneralLedgerReportPage';
 import ChartOfAccountsPage from './pages/ChartOfAccountsPage';
 import CollectionReportPage from './pages/CollectionReportPage';
 import UnconfirmedPaymentsPage from './pages/UnconfirmedPaymentsPage';
+import PettyCashAllocationPage from './pages/PettyCashAllocationPage';
+import PettyCashBalancesPage from './pages/PettyCashBalancesPage';
+import PettyCashStaffDetailsPage from './pages/PettyCashStaffDetailsPage';
 import InventoryTransactionsPage from './pages/InventoryTransactionsPage';
 import InventoryAsOfPage from './pages/InventoryAsOfPage';
 import StockTransferPage from './pages/StockTransferPage';
@@ -757,6 +760,21 @@ const App = () => {
             <Route path="/customers/:id/payments" element={
               <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'finance']} fallbackPath="/sales-dashboard">
                 <CustomerPaymentsPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/petty-cash" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance']} fallbackPath="/sales-dashboard">
+                <PettyCashAllocationPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/petty-cash/balances" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance']} fallbackPath="/sales-dashboard">
+                <PettyCashBalancesPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/petty-cash/staff/:id" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance']} fallbackPath="/sales-dashboard">
+                <PettyCashStaffDetailsPage />
               </RoleBasedRoute>
             } />
             <Route path="/unconfirmed-payments" element={

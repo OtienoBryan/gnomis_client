@@ -125,6 +125,12 @@ const navigation = [
     roles: ['admin', 'manager', 'accountant', 'executive', 'sales']
   },
   {
+    name: 'Petty Cash',
+    href: '/petty-cash',
+    icon: PiggyBankIcon,
+    roles: ['admin', 'manager', 'accountant', 'executive', 'sales', 'finance']
+  },
+  {
     name: 'Assets',
     href: '/assets',
     icon: BoxIcon,

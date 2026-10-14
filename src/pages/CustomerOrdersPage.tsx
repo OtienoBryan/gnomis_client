@@ -58,6 +58,13 @@ const CustomerOrdersPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [quickActionOrderId, setQuickActionOrderId] = useState<number | null>(null);
+  const [emailOrder, setEmailOrder] = useState<SalesOrder | null>(null);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailCc, setEmailCc] = useState('');
+  const [emailOrderConfirmed, setEmailOrderConfirmed] = useState(false);
+  const [emailMessage, setEmailMessage] = useState('');
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [productSearch, setProductSearch] = useState('');
@@ -333,7 +340,7 @@ const CustomerOrdersPage: React.FC = () => {
             o.tax_amount != null ? formatAmount(Number(o.tax_amount)) : '',
             o.total_amount != null ? formatAmount(Number(o.total_amount)) : '',
             o.order_date ? formatDate(o.order_date) : '',
-            getMyStatusText(o.my_status),
+            o.status === 'assigned' && o.my_status === 2 ? 'Assigned' : getMyStatusText(o.my_status),
           ]
             .map(csvEscape)
             .join(','),
@@ -377,9 +384,22 @@ const CustomerOrdersPage: React.FC = () => {
   // Use status counts from API - memoized for performance
   const statusCounts = useMemo(() => apiStatusCounts, [apiStatusCounts]);
 
+  // Tab label: 'assigned' is a filter on status = 'assigned' (my_status 2), the rest map to my_status
+  const getStatusFilterLabel = (value: string) => {
+    if (value === 'all') return 'All Statuses';
+    if (value === 'assigned') return 'Assigned';
+    return getMyStatusText(Number(value));
+  };
+
   const getFilterClasses = (value: string, selected: boolean) => {
     // Explicit color classes per status
     const byVal: Record<string, {selected: string; unselected: string; pillSel: string; pillUnsel: string}> = {
+      assigned: {
+        selected: 'bg-purple-600 text-white border-purple-600',
+        unselected: 'bg-white text-purple-700 border-purple-300 hover:bg-purple-50',
+        pillSel: 'bg-white text-purple-700',
+        pillUnsel: 'bg-purple-100 text-purple-800'
+      },
       all: {
         selected: 'bg-gray-700 text-white border-gray-700',
         unselected: 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50',
@@ -519,7 +539,15 @@ const CustomerOrdersPage: React.FC = () => {
     return statusMap[my_status || 0] || 'Unknown';
   };
 
-  const getMyStatusBadge = (my_status?: number) => {
+  const getMyStatusBadge = (my_status?: number, status?: string) => {
+    // my_status 2 is shared: status 'assigned' is waiting for dispatch, anything else is in transit
+    if (my_status === 2 && status === 'assigned') {
+      return (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-purple-100 text-purple-800">
+          Assigned
+        </span>
+      );
+    }
     const statusColors: { [key: number]: string } = {
       0: 'bg-gray-100 text-gray-800',
       1: 'bg-yellow-100 text-yellow-800',
@@ -661,13 +689,44 @@ const CustomerOrdersPage: React.FC = () => {
       return;
     }
 
-    const confirmMessage = newStatus === 'confirmed'
-      ? `Confirm order ${order.so_number}? This will update the client's ledger and post journal entries.`
-      : `Cancel order ${order.so_number}?`;
-    if (!window.confirm(confirmMessage)) return;
+    if (newStatus === 'confirmed') {
+      // The order is only confirmed once the user completes the email step in the modal
+      openConfirmModal(order);
+      return;
+    }
 
+    if (!window.confirm(`Cancel order ${order.so_number}?`)) return;
+    await performStatusChange(order, 'cancelled');
+  };
+
+  // Opens the confirm-order modal: pick the recipient (and CC) first, nothing is posted yet
+  const openConfirmModal = (order: SalesOrder) => {
+    setEmailTo('');
+    setEmailCc('');
+    setEmailMessage('');
+    setEmailError('');
+    setEmailOrderConfirmed(false);
+    setEmailOrder(order);
+    // Pick the recipient from the clients table (list rows don't reliably carry the email)
+    const clientId = order.client_id || order.customer_id;
+    if (clientId) {
+      axios
+        .get(`/api/clients/${clientId}`)
+        .then((res) => {
+          const email = String(res.data?.email || '').trim();
+          if (email) setEmailTo((prev) => prev || email);
+        })
+        .catch((err) => console.error('Could not load client email:', err));
+    }
+  };
+
+  const performStatusChange = async (
+    order: SalesOrder,
+    newStatus: 'confirmed' | 'cancelled'
+  ): Promise<{ ok: boolean; error?: string }> => {
     setQuickActionOrderId(order.id);
     setError('');
+    let result: { ok: boolean; error?: string } = { ok: false };
     try {
       const updateData: any = {
         client_id: order.client_id || order.customer_id,
@@ -679,6 +738,8 @@ const CustomerOrdersPage: React.FC = () => {
       // Only include items when confirming - cancelling a not-yet-approved order
       // can go through the lightweight status-only path on the backend.
       if (newStatus === 'confirmed') {
+        // The order's (LPO) prices already include VAT: the server extracts VAT instead of adding it
+        updateData.prices_include_vat = true;
         updateData.items = order.items!.map((item) => ({
           product_id: item.product_id,
           quantity: item.quantity,
@@ -692,14 +753,70 @@ const CustomerOrdersPage: React.FC = () => {
       if (response.success) {
         setSuccessMessage(`Order ${order.so_number} ${newStatus === 'confirmed' ? 'confirmed' : 'cancelled'} successfully`);
         await fetchAllData();
+        result = { ok: true };
       } else {
-        setError(response.error || `Failed to ${newStatus} order`);
+        const message = response.error || `Failed to ${newStatus} order`;
+        setError(message);
+        result = { ok: false, error: message };
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(`Error setting order ${order.id} to ${newStatus}:`, err);
-      setError(`Failed to ${newStatus} order`);
+      const message = err.response?.data?.error || `Failed to ${newStatus} order`;
+      setError(message);
+      result = { ok: false, error: message };
     } finally {
       setQuickActionOrderId(null);
+    }
+    return result;
+  };
+
+  // Confirms the order, then (optionally) emails the invoice. The order is never confirmed if the
+  // user cancels the modal. If the email fails after confirming, the modal stays open for a retry
+  // and only the email step is repeated.
+  const handleConfirmOrder = async (sendEmail: boolean) => {
+    if (!emailOrder) return;
+    const to = emailTo.trim();
+    if (sendEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      setEmailError('Enter a valid recipient email address');
+      return;
+    }
+
+    setEmailSending(true);
+    setEmailError('');
+    try {
+      if (!emailOrderConfirmed) {
+        const confirmed = await performStatusChange(emailOrder, 'confirmed');
+        if (!confirmed.ok) {
+          setEmailError(confirmed.error || 'Failed to confirm order');
+          return;
+        }
+        setEmailOrderConfirmed(true);
+      }
+
+      if (!sendEmail) {
+        setEmailOrder(null);
+        return;
+      }
+
+      try {
+        const res = await salesOrdersService.sendInvoiceEmail(emailOrder.id, {
+          to,
+          cc: emailCc.trim() || undefined,
+          message: emailMessage.trim() || undefined,
+        });
+        if (res.success) {
+          setSuccessMessage(`Order ${emailOrder.so_number} confirmed and invoice sent to ${to}`);
+          setEmailOrder(null);
+        } else {
+          setEmailError(`Order confirmed, but the invoice email failed: ${res.error || 'unknown error'}`);
+        }
+      } catch (err: any) {
+        setEmailError(
+          `Order confirmed, but the invoice email failed: ${err.response?.data?.error || err.message || 'unknown error'}`
+        );
+      }
+    } finally {
+      setEmailSending(false);
     }
   };
 
@@ -1323,7 +1440,7 @@ const CustomerOrdersPage: React.FC = () => {
                     )}
                     {myStatusFilter !== 'all' && (
                       <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-red-100 text-red-800">
-                        Status: {getMyStatusText(Number(myStatusFilter))}
+                        Status: {getStatusFilterLabel(myStatusFilter)}
                       </span>
                     )}
                     {riderFilter && (
@@ -1453,10 +1570,10 @@ const CustomerOrdersPage: React.FC = () => {
                 Status
               </label>
               <div className="flex flex-wrap gap-1.5">
-                {(['all', '0', '1', '2', '3', '4', '5', '6'] as const).map((value) => {
+                {(['all', '0', '1', 'assigned', '2', '3', '4', '5', '6'] as const).map((value) => {
                   const isSelected = myStatusFilter === value;
                   const classes = getFilterClasses(value, isSelected);
-                  const label = value === 'all' ? 'All Statuses' : getMyStatusText(Number(value));
+                  const label = getStatusFilterLabel(value);
                   const count = statusCounts[value] ?? 0;
                   return (
                     <button
@@ -1552,12 +1669,6 @@ const CustomerOrdersPage: React.FC = () => {
                       Region
                     </th>
                     <th className="px-4 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">
-                      Outlet Type
-                    </th>
-                    <th className="px-4 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">
-                      Outlet Account
-                    </th>
-                    <th className="px-4 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">
                       FMR
                     </th>
                      
@@ -1616,12 +1727,6 @@ const CustomerOrdersPage: React.FC = () => {
                         <div className="text-[10px] text-gray-900">{order.region_name || '—'}</div>
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap">
-                        <div className="text-[10px] text-gray-900">{order.outlet_type_name || '—'}</div>
-                      </td>
-                      <td className="px-4 py-2 whitespace-nowrap">
-                        <div className="text-[10px] text-gray-900">{order.outlet_account_name || '—'}</div>
-                      </td>
-                      <td className="px-4 py-2 whitespace-nowrap">
                         <div className="flex items-center">
                           
                           <div className="ml-2">
@@ -1669,7 +1774,7 @@ const CustomerOrdersPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap">
-                        {getMyStatusBadge(order.my_status)}
+                        {getMyStatusBadge(order.my_status, order.status)}
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-right">
                         {(order.my_status ?? 0) === 0 && (user?.role === 'admin' || user?.role === 'executive' || user?.role === 'sales') ? (
@@ -1720,17 +1825,37 @@ const CustomerOrdersPage: React.FC = () => {
                             >
                               View Invoice
                             </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/delivery-note/${order.id}`);
+                              }}
+                              className="px-2 py-1 text-[10px] font-medium rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                            >
+                              Delivery Note
+                            </button>
                           </div>
                         ) : (order.my_status ?? 0) >= 1 ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/sales-order-invoice/${order.id}`);
-                            }}
-                            className="px-2 py-1 text-[10px] font-medium rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
-                          >
-                            View Invoice
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/sales-order-invoice/${order.id}`);
+                              }}
+                              className="px-2 py-1 text-[10px] font-medium rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                            >
+                              View Invoice
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/delivery-note/${order.id}`);
+                              }}
+                              className="px-2 py-1 text-[10px] font-medium rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+                            >
+                              Delivery Note
+                            </button>
+                          </div>
                         ) : (
                           <span className="text-[10px] text-gray-400">—</span>
                         )}
@@ -3155,6 +3280,79 @@ const CustomerOrdersPage: React.FC = () => {
                   className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Send invoice by email after confirming an order */}
+        {emailOrder && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50">
+            <div className="bg-white rounded-md shadow-2xl w-full max-w-md mx-4 p-4">
+              <h3 className="text-sm font-bold text-gray-900 mb-1">Confirm order {emailOrder.so_number}</h3>
+              <p className="text-[11px] text-gray-600 mb-3">
+                {emailOrderConfirmed
+                  ? 'The order is confirmed. Fix the details below and retry sending the invoice.'
+                  : "Confirming updates the client's ledger and posts journal entries. Check the email details, then confirm the order and send the invoice to the client."}
+              </p>
+              <label className="block text-[10px] font-medium text-gray-700 mb-1">Recipient email</label>
+              <input
+                type="email"
+                value={emailTo}
+                onChange={(e) => setEmailTo(e.target.value)}
+                placeholder="client@example.com"
+                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs mb-2 focus:ring-1 focus:ring-red-500 focus:border-transparent"
+                disabled={emailSending}
+              />
+              <label className="block text-[10px] font-medium text-gray-700 mb-1">CC (optional, separate several with commas)</label>
+              <input
+                type="text"
+                value={emailCc}
+                onChange={(e) => setEmailCc(e.target.value)}
+                placeholder="accounts@example.com, manager@example.com"
+                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs mb-2 focus:ring-1 focus:ring-red-500 focus:border-transparent"
+                disabled={emailSending}
+              />
+              <label className="block text-[10px] font-medium text-gray-700 mb-1">Message (optional)</label>
+              <textarea
+                value={emailMessage}
+                onChange={(e) => setEmailMessage(e.target.value)}
+                rows={3}
+                placeholder="Add a note to include above the invoice"
+                className="w-full border border-gray-300 rounded-md px-2 py-1.5 text-xs focus:ring-1 focus:ring-red-500 focus:border-transparent"
+                disabled={emailSending}
+              />
+              {emailError && (
+                <div className="mt-2 p-2 bg-red-100 border border-red-400 text-red-700 rounded text-[10px]">{emailError}</div>
+              )}
+              <div className="flex justify-end gap-2 mt-3">
+                <button
+                  onClick={() => setEmailOrder(null)}
+                  disabled={emailSending}
+                  className="px-3 py-1.5 text-xs text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300"
+                >
+                  {emailOrderConfirmed ? 'Close' : 'Cancel'}
+                </button>
+                {!emailOrderConfirmed && (
+                  <button
+                    onClick={() => handleConfirmOrder(false)}
+                    disabled={emailSending}
+                    className="px-3 py-1.5 text-xs text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Confirm without email
+                  </button>
+                )}
+                <button
+                  onClick={() => handleConfirmOrder(true)}
+                  disabled={emailSending || !emailTo.trim()}
+                  className="px-3 py-1.5 text-xs text-white bg-red-600 rounded-md hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {emailSending
+                    ? 'Working...'
+                    : emailOrderConfirmed
+                      ? 'Send Invoice'
+                      : 'Confirm & Send Invoice'}
                 </button>
               </div>
             </div>
