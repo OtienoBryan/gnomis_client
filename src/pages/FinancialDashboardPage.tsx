@@ -215,6 +215,7 @@ const FinancialDashboardPage = () => {
         { to: '/sales-rep-leaves', label: 'Sales Rep Leaves', icon: <MapPinIcon className="h-4 w-4" />, accent: 'green' },
         { to: '/overall-attendance', label: 'Visits Summary', icon: <MapPinIcon className="h-4 w-4" />, accent: 'blue' },
         { to: '/activity', label: 'Sales Rep Activity', icon: <MapPinIcon className="h-4 w-4" />, accent: 'blue' },
+        { to: '/staff-location', label: 'Staff Location', icon: <MapPinIcon className="h-4 w-4" />, accent: 'pink' },
       ]
     },
     {
@@ -223,6 +224,7 @@ const FinancialDashboardPage = () => {
         { to: '/purchase-orders', label: 'Purchase Orders', icon: <ShoppingCartIcon className="h-4 w-4" />, accent: 'red' },
         { to: '/store-inventory', label: 'Store Inventory', icon: <PackageIcon className="h-4 w-4" />, accent: 'purple' },
         { to: '/products', label: 'Products', icon: <BoxIcon className="h-4 w-4" />, accent: 'red' },
+        { to: '/raw-materials-inventory', label: 'Raw Materials', icon: <BoxIcon className="h-4 w-4" />, accent: 'yellow' },
         // { to: '/assets', label: 'Assets', icon: <BoxIcon className="h-4 w-4" />, accent: 'red' }
       ]
     },

@@ -23,12 +23,6 @@ const navigation = [
     icon: UsersIcon,
     roles: ['admin', 'manager', 'accountant', 'user', 'sales', 'executive', 'finance']
   },
-  {
-    name: 'Guards List',
-    href: '/dashboard/staff-list',
-    icon: ImageIcon,
-    roles: ['admin', 'manager', 'hr', 'executive']
-  },
   // {
   //   name: 'Teams List',
   //   href: '/dashboard/teams-list',
