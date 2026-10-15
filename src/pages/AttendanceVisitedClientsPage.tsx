@@ -6,7 +6,7 @@ import { SalesRep } from '../services/salesService';
 import { MapPin, ArrowLeft, FileText, Navigation, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');

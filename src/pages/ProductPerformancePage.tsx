@@ -194,7 +194,7 @@ const ProductPerformancePage: React.FC = () => {
       if (!user?.id || countries.length === 0 || defaultCountrySet) return;
       
       try {
-        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
         

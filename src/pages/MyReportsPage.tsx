@@ -4,7 +4,7 @@ import axios from 'axios';
 import { DateTime } from 'luxon';
 import { FileText, Calendar, User, MapPin, Search, Filter, Download, ArrowLeft, Clock, MessageSquare, Eye, Image } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
 
 // Configure axios for authentication
 const getAuthHeaders = () => {

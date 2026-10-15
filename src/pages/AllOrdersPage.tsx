@@ -61,7 +61,7 @@ const AllOrdersPage: React.FC = () => {
     setError(null);
     try {
       console.log('Fetching all sales orders (including drafts)...');
-      console.log('API URL:', `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/financial/sales-orders-all`);
+      console.log('API URL:', `${import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')}/financial/sales-orders-all`);
       
       const soRes = await salesOrdersService.getAllIncludingDrafts();
       console.log('Sales orders response:', soRes);

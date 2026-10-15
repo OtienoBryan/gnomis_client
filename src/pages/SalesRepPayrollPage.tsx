@@ -9,7 +9,7 @@ import { salesService, SalesRep, Country } from '../services/salesService';
 import { API_CONFIG } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
 const PAYROLL_API_BASE = API_CONFIG.getUrl('/payroll');
 
 const getAuthHeaders = () => {

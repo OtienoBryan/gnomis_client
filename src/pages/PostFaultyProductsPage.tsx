@@ -140,7 +140,7 @@ const PostFaultyProductsPage: React.FC = () => {
           console.log(`📦 Checking inventory for product: ${item.product_name} (ID: ${item.product_id})`);
           
           // Get current inventory for this product in the selected store
-          const inventoryResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/financial/stores/${selectedStore}/inventory`);
+          const inventoryResponse = await fetch(`${import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api')}/financial/stores/${selectedStore}/inventory`);
           
           if (!inventoryResponse.ok) {
             console.error('Inventory API response not ok:', inventoryResponse.status, inventoryResponse.statusText);
