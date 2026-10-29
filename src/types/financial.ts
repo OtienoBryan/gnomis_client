@@ -157,6 +157,11 @@ export interface User {
     delivered_at?: string;
     delivery_image?: string;
     delivery_notes?: string;
+    delivery_note_url?: string | null;
+    delivery_recipient_name?: string | null;
+    delivery_recipient_id_number?: string | null;
+    delivered_at?: string | null;
+    cancellation_comment?: string | null;
     customer_balance?: string;
     received_by?: number;
     returned_at?: string;

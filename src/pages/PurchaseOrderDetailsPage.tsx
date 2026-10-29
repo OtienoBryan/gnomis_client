@@ -502,12 +502,12 @@ const PurchaseOrderDetailsPage: React.FC = () => {
               </Link>
               )}
               {purchaseOrder.status === 'sent' && (
-                <button
-                  onClick={() => setShowReceiveForm(!showReceiveForm)}
+                <Link
+                  to={`/receive-items/${purchaseOrder.id}`}
                   className="inline-flex items-center px-2.5 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                 >
-                  {showReceiveForm ? 'Cancel' : 'Receive'}
-                </button>
+                  Receive
+                </Link>
               )}
               {purchaseOrder.status === 'draft' && !editMode && (
                 <button

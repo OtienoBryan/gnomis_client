@@ -337,7 +337,7 @@ const ReceiveItemsPage: React.FC = () => {
               </button>
               <button
                 type="submit"
-                disabled={submitting || getTotalReceiving() === 0}
+                disabled={submitting || !selectedStore || getTotalReceiving() === 0}
                 className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Check className="h-3.5 w-3.5" />

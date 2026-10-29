@@ -186,6 +186,12 @@ const RawMaterialRequestsPage: React.FC = () => {
               New Request
             </Link>
             <Link
+              to="/produced-products"
+              className="px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
+            >
+              Produced Products
+            </Link>
+            <Link
               to="/raw-material-usage"
               className="px-3 py-1.5 border border-gray-200 rounded-lg shadow-sm text-xs font-medium text-gray-700 bg-white hover:bg-gray-50"
             >
@@ -307,133 +313,145 @@ const RawMaterialRequestsPage: React.FC = () => {
       </div>
 
       {detailsOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4" onClick={closeDetails}>
-          <div className="bg-white rounded-2xl shadow-lg w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 sm:p-6" onClick={closeDetails}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-5 border-b border-gray-100 flex items-start justify-between gap-4 bg-gray-50">
               <div>
-                <h2 className="text-sm font-bold text-gray-900">Request {selected ? selected.request_number : ''}</h2>
-                {selected && <p className="text-xs text-gray-500 mt-0.5">{dateTime(selected.created_at)}</p>}
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Raw material request</p>
+                <div className="flex items-center gap-3 mt-1">
+                  <h2 className="text-xl font-bold text-gray-900">{selected ? selected.request_number : 'Loading...'}</h2>
+                  {selected && <StatusPill status={selected.status} />}
+                </div>
+                {selected && <p className="text-sm text-gray-500 mt-1">Created {dateTime(selected.created_at)}</p>}
               </div>
-              <button type="button" onClick={closeDetails} className="text-gray-400 hover:text-gray-600 text-xl leading-none" aria-label="Close">
+              <button type="button" onClick={closeDetails} className="text-gray-400 hover:text-gray-600 text-3xl leading-none" aria-label="Close">
                 ×
               </button>
             </div>
 
-            <div className="px-5 py-4 overflow-y-auto space-y-5">
+            <div className="px-6 py-5 overflow-y-auto flex-1 space-y-6">
               {detailsLoading && (
-                <div className="py-10 text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
+                <div className="py-20 text-center">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600 mx-auto"></div>
                 </div>
               )}
-              {detailsError && <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">{detailsError}</div>}
+              {detailsError && <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">{detailsError}</div>}
 
               {selected && (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Status</p>
-                      <div className="mt-0.5">
-                        <StatusPill status={selected.status} />
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Requested by', value: selected.requested_by_name || '—' },
+                      { label: 'Products to produce', value: selected.products.length },
+                      { label: 'Raw materials', value: selected.items.length },
+                      { label: 'Issued from', value: selected.store_name || '—' },
+                    ].map(card => (
+                      <div key={card.label} className="border border-gray-100 rounded-xl px-4 py-3 bg-white shadow-sm">
+                        <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">{card.label}</p>
+                        <p className="text-base font-bold text-gray-900 mt-1 truncate">{card.value}</p>
                       </div>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Requested by</p>
-                      <p className="text-xs font-semibold text-gray-900">{selected.requested_by_name || '—'}</p>
-                    </div>
+                    ))}
                   </div>
 
                   {selected.notes && (
-                    <p className="text-xs text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2">{selected.notes}</p>
-                  )}
-
-                  {selected.status !== 'pending' && selected.reviewed_at && (
-                    <div className="text-xs text-gray-700 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 space-y-0.5">
-                      <p>
-                        <span className="font-semibold">{STATUS_LABEL[selected.status]}</span>
-                        {selected.reviewed_by_name ? ` by ${selected.reviewed_by_name}` : ''} on {dateTime(selected.reviewed_at)}
-                      </p>
-                      {selected.store_name && <p>Issued from: {selected.store_name}</p>}
-                      {selected.review_note && <p>Note: {selected.review_note}</p>}
+                    <div className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
+                      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block mb-1">Request notes</span>
+                      {selected.notes}
                     </div>
                   )}
 
-                  {selected.status === 'completed' && selected.completed_at && (
-                    <div className="text-xs text-gray-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 space-y-0.5">
-                      <p>
-                        <span className="font-semibold">Production confirmed</span>
-                        {selected.completed_by_name ? ` by ${selected.completed_by_name}` : ''} on {dateTime(selected.completed_at)}
-                      </p>
-                      {selected.production_note && <p>Note: {selected.production_note}</p>}
+                  {(!!selected.reviewed_at || !!selected.completed_at) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {(selected.status as RequestStatus) !== 'pending' && selected.reviewed_at && (
+                        <div className="text-sm text-gray-700 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 space-y-1">
+                          <p>
+                            <span className="font-semibold">{STATUS_LABEL[selected.status]}</span>
+                            {selected.reviewed_by_name ? ` by ${selected.reviewed_by_name}` : ''} on {dateTime(selected.reviewed_at)}
+                          </p>
+                          {selected.review_note && <p>Note: {selected.review_note}</p>}
+                        </div>
+                      )}
+                      {selected.status === 'completed' && selected.completed_at && (
+                        <div className="text-sm text-gray-700 bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 space-y-1">
+                          <p>
+                            <span className="font-semibold">Production confirmed</span>
+                            {selected.completed_by_name ? ` by ${selected.completed_by_name}` : ''} on {dateTime(selected.completed_at)}
+                          </p>
+                          {selected.production_note && <p>Note: {selected.production_note}</p>}
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  <div>
-                    <h3 className="text-xs font-bold text-gray-900 mb-2">Products to produce</h3>
-                    <div className="border border-gray-100 rounded-xl overflow-hidden">
-                      <table className="min-w-full divide-y divide-gray-100">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className={`${th} text-left`}>Product</th>
-                            <th className={`${th} text-right`}>Target qty</th>
-                            {selected.status === 'completed' && <th className={`${th} text-right`}>Produced</th>}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {selected.products.map(p => (
-                            <tr key={p.id}>
-                              <td className="px-4 py-2 text-xs font-semibold text-gray-900">{p.product_name || `Product ${p.product_id}`}</td>
-                              <td className="px-4 py-2 text-right text-xs text-gray-900">{qty(p.quantity)}</td>
-                              {selected.status === 'completed' && (
-                                <td className="px-4 py-2 text-right text-xs font-semibold text-gray-900">{qty(p.produced_quantity ?? 0)}</td>
-                              )}
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 mb-2">Products to produce</h3>
+                      <div className="border border-gray-100 rounded-xl overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-100">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className={`${th} text-left`}>Product</th>
+                              <th className={`${th} text-right`}>Target qty</th>
+                              {selected.status === 'completed' && <th className={`${th} text-right`}>Produced</th>}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {selected.products.map(p => (
+                              <tr key={p.id}>
+                                <td className="px-4 py-3 text-sm font-semibold text-gray-900">{p.product_name || `Product ${p.product_id}`}</td>
+                                <td className="px-4 py-3 text-right text-sm text-gray-900">{qty(p.quantity)}</td>
+                                {selected.status === 'completed' && (
+                                  <td className="px-4 py-3 text-right text-sm font-semibold text-gray-900">{qty(p.produced_quantity ?? 0)}</td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <h3 className="text-xs font-bold text-gray-900 mb-2">Raw materials requested</h3>
-                    <div className="border border-gray-100 rounded-xl overflow-hidden">
-                      <table className="min-w-full divide-y divide-gray-100">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className={`${th} text-left`}>Raw material</th>
-                            <th className={`${th} text-right`}>Quantity</th>
-                            <th className={`${th} text-left`}>Unit</th>
-                            {selected.status === 'completed' && (
-                              <>
-                                <th className={`${th} text-right`}>Used</th>
-                                <th className={`${th} text-right`}>Returned</th>
-                              </>
-                            )}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {selected.items.map(i => (
-                            <tr key={i.id}>
-                              <td className="px-4 py-2 text-xs font-semibold text-gray-900">{i.name || `Raw material ${i.raw_material_id}`}</td>
-                              <td className="px-4 py-2 text-right text-xs text-gray-900">{qty(i.quantity)}</td>
-                              <td className="px-4 py-2 text-xs text-gray-600">{i.unit || ''}</td>
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 mb-2">Raw materials requested</h3>
+                      <div className="border border-gray-100 rounded-xl overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-100">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className={`${th} text-left`}>Raw material</th>
+                              <th className={`${th} text-right`}>Quantity</th>
+                              <th className={`${th} text-left`}>Unit</th>
                               {selected.status === 'completed' && (
                                 <>
-                                  <td className="px-4 py-2 text-right text-xs text-gray-900">{qty(i.used_quantity ?? 0)}</td>
-                                  <td className="px-4 py-2 text-right text-xs text-blue-700">{qty(i.returned_quantity ?? 0)}</td>
+                                  <th className={`${th} text-right`}>Used</th>
+                                  <th className={`${th} text-right`}>Returned</th>
                                 </>
                               )}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {selected.items.map(i => (
+                              <tr key={i.id}>
+                                <td className="px-4 py-3 text-sm font-semibold text-gray-900">{i.name || `Raw material ${i.raw_material_id}`}</td>
+                                <td className="px-4 py-3 text-right text-sm text-gray-900">{qty(i.quantity)}</td>
+                                <td className="px-4 py-3 text-sm text-gray-600">{i.unit || ''}</td>
+                                {selected.status === 'completed' && (
+                                  <>
+                                    <td className="px-4 py-3 text-right text-sm text-gray-900">{qty(i.used_quantity ?? 0)}</td>
+                                    <td className="px-4 py-3 text-right text-sm text-blue-700">{qty(i.returned_quantity ?? 0)}</td>
+                                  </>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
                 </>
               )}
             </div>
 
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
-              <button type="button" onClick={closeDetails} className="px-3 py-1.5 rounded-md text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50">
+              <button type="button" onClick={closeDetails} className="px-5 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200">
                 Close
               </button>
             </div>

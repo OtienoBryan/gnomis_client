@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_CONFIG } from '../config/api';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // CSV Export utility function
 const exportToCSV = (data: any[], filename: string) => {
@@ -48,6 +50,88 @@ const exportToCSV = (data: any[], filename: string) => {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+};
+
+// PDF Export utility function
+const loadLogo = (): Promise<{ dataUrl: string; w: number; h: number } | null> =>
+  new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d')!.drawImage(img, 0, 0);
+        resolve({ dataUrl: canvas.toDataURL('image/jpeg', 0.92), w: img.naturalWidth, h: img.naturalHeight });
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = '/logo.jpg';
+  });
+
+const exportToPDF = async (data: any[], filename: string) => {
+  if (data.length === 0) return;
+
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const money = (v: any) =>
+    (Number(v) || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Company header
+  const logo = await loadLogo();
+  let textX = 14;
+  if (logo) {
+    const logoH = 24;
+    const logoW = Math.min(40, (logo.w / logo.h) * logoH);
+    doc.addImage(logo.dataUrl, 'JPEG', 14, 8, logoW, logoH);
+    textX = 14 + logoW + 6;
+  }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text('GNOMIS QUALITY PRODUCTS LIMITED', textX, 15);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text('EMAIL: gnomisp@gmail.com; gnomisp@yahoo.com', textX, 22);
+  doc.text('Contacts: +254725606061/0724803741', textX, 28);
+  doc.setDrawColor(200);
+  doc.line(14, 35, pageWidth - 14, 35);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('Suppliers List', 14, 43);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')}`, pageWidth - 14, 43, { align: 'right' });
+
+  const totalBalance = data.reduce((sum, s) => sum + (Number(s.balance) || 0), 0);
+
+  autoTable(doc, {
+    startY: 47,
+    head: [['#', 'Company', 'Code', 'Contact', 'Email', 'Phone', 'Tax ID', 'Balance (KES)']],
+    body: data.map((s, i) => [
+      i + 1,
+      s.company_name || '',
+      s.supplier_code || '-',
+      s.contact_person || '-',
+      s.email || '-',
+      s.phone || '-',
+      s.tax_id || '-',
+      money(s.balance)
+    ]),
+    foot: [['', 'Total', '', '', '', '', '', money(totalBalance)]],
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [220, 38, 38] },
+    footStyles: { fillColor: [243, 244, 246], textColor: 20, fontStyle: 'bold' },
+    columnStyles: { 0: { cellWidth: 10 }, 7: { halign: 'right' } },
+    didDrawPage: () => {
+      doc.setFontSize(8);
+      doc.text(`Page ${doc.getNumberOfPages()}`, pageWidth - 14, doc.internal.pageSize.getHeight() - 8, { align: 'right' });
+    }
+  });
+
+  doc.save(`${filename}.pdf`);
 };
 
 // Icons for the UI
@@ -672,6 +756,16 @@ const SuppliersPage: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 Export CSV
+              </button>
+              <button
+                onClick={() => exportToPDF(filtered, `suppliers_${new Date().toISOString().split('T')[0]}`)}
+                disabled={filtered.length === 0}
+                className="px-3 py-1.5 text-xs border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                Convert to PDF
               </button>
               <button
                 className="px-3 py-1.5 text-xs bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors duration-200 flex items-center gap-1.5 shadow-lg"

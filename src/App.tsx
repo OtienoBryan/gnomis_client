@@ -97,6 +97,7 @@ import RawMaterialLedgerPage from './pages/RawMaterialLedgerPage';
 import RawMaterialInventoryPage from './pages/RawMaterialInventoryPage';
 import RawMaterialRequestsPage from './pages/RawMaterialRequestsPage';
 import RawMaterialUsagePage from './pages/RawMaterialUsagePage';
+import ProducedProductsPage from './pages/ProducedProductsPage';
 import CheckedInSalesRepsPage from './pages/CheckedInSalesRepsPage';
 import StaffLocationPage from './pages/StaffLocationPage';
 import PaymentCollectionsPage from './pages/PaymentCollectionsPage';
@@ -879,6 +880,11 @@ const App = () => {
             <Route path="/raw-material-usage" element={
               <RoleBasedRoute allowedRoles={['admin', 'manager', 'stock', 'accountant', 'sales', 'executive', 'finance']} fallbackPath="/sales-dashboard">
                 <RawMaterialUsagePage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/produced-products" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'stock', 'accountant', 'sales', 'executive', 'finance']} fallbackPath="/sales-dashboard">
+                <ProducedProductsPage />
               </RoleBasedRoute>
             } />
             <Route path="/raw-material-requests/new" element={

@@ -340,7 +340,7 @@ const CustomerOrdersPage: React.FC = () => {
             o.tax_amount != null ? formatAmount(Number(o.tax_amount)) : '',
             o.total_amount != null ? formatAmount(Number(o.total_amount)) : '',
             o.order_date ? formatDate(o.order_date) : '',
-            o.status === 'assigned' && o.my_status === 2 ? 'Assigned' : getMyStatusText(o.my_status),
+            getMyStatusText(o.my_status),
           ]
             .map(csvEscape)
             .join(','),
@@ -418,23 +418,17 @@ const CustomerOrdersPage: React.FC = () => {
         pillSel: 'bg-white text-red-700',
         pillUnsel: 'bg-red-100 text-red-800'
       },
-      '2': {
+      '3': {
         selected: 'bg-amber-600 text-white border-amber-600',
         unselected: 'bg-white text-amber-700 border-amber-300 hover:bg-amber-50',
         pillSel: 'bg-white text-amber-700',
         pillUnsel: 'bg-amber-100 text-amber-800'
       },
-      '3': {
+      '4': {
         selected: 'bg-green-600 text-white border-green-600',
         unselected: 'bg-white text-green-700 border-green-300 hover:bg-green-50',
         pillSel: 'bg-white text-green-700',
         pillUnsel: 'bg-green-100 text-green-800'
-      },
-      '4': {
-        selected: 'bg-red-600 text-white border-red-600',
-        unselected: 'bg-white text-red-700 border-red-300 hover:bg-red-50',
-        pillSel: 'bg-white text-red-700',
-        pillUnsel: 'bg-red-100 text-red-800'
       },
       '5': {
         selected: 'bg-rose-600 text-white border-rose-600',
@@ -530,30 +524,22 @@ const CustomerOrdersPage: React.FC = () => {
     const statusMap: { [key: number]: string } = {
       0: 'New Orders',
       1: 'Approved',
-      2: 'In Transit',
-      3: 'Complete',
-      4: 'Cancelled',
-      5: 'Declined',
+      2: 'Assigned',
+      3: 'In Transit',
+      4: 'Complete',
+      5: 'Cancelled',
       6: 'Returned to Stock'
     };
     return statusMap[my_status || 0] || 'Unknown';
   };
 
-  const getMyStatusBadge = (my_status?: number, status?: string) => {
-    // my_status 2 is shared: status 'assigned' is waiting for dispatch, anything else is in transit
-    if (my_status === 2 && status === 'assigned') {
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-purple-100 text-purple-800">
-          Assigned
-        </span>
-      );
-    }
+  const getMyStatusBadge = (my_status?: number, _status?: string) => {
     const statusColors: { [key: number]: string } = {
       0: 'bg-gray-100 text-gray-800',
       1: 'bg-yellow-100 text-yellow-800',
       2: 'bg-purple-100 text-purple-800',
       3: 'bg-green-100 text-green-800',
-      4: 'bg-red-100 text-red-800',
+      4: 'bg-green-100 text-green-800',
       5: 'bg-red-100 text-red-800',
       6: 'bg-orange-100 text-orange-800'
     };
@@ -1107,7 +1093,7 @@ const CustomerOrdersPage: React.FC = () => {
       return;
     }
     
-    if (order.my_status !== 4) { // 4 = Cancelled only
+    if (order.my_status !== 5) { // 5 = Cancelled only
       setError('Only cancelled orders can have products returned to stock');
       return;
     }
@@ -1355,6 +1341,11 @@ const CustomerOrdersPage: React.FC = () => {
     }
   };
 
+  const deliveryImageSrc = (url?: string | null) => {
+    const value = String(url || '');
+    return value.startsWith('http') ? value : `/uploads/${value}`;
+  };
+
   // Delivery Details Modal functions
   const openDeliveryDetailsModal = (order: SalesOrder) => {
     setDeliveryDetailsOrder(order);
@@ -1570,7 +1561,7 @@ const CustomerOrdersPage: React.FC = () => {
                 Status
               </label>
               <div className="flex flex-wrap gap-1.5">
-                {(['all', '0', '1', 'assigned', '2', '3', '4', '5', '6'] as const).map((value) => {
+                {(['all', '0', '1', 'assigned', '3', '4', '5', '6'] as const).map((value) => {
                   const isSelected = myStatusFilter === value;
                   const classes = getFilterClasses(value, isSelected);
                   const label = getStatusFilterLabel(value);
@@ -1689,6 +1680,12 @@ const CustomerOrdersPage: React.FC = () => {
                       Date
                     </th>
                     <th className="px-4 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">
+                      Driver
+                    </th>
+                    <th className="px-4 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">
+                      Cancellation Reason
+                    </th>
+                    <th className="px-4 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
                     <th className="px-4 py-2 text-right text-[9px] font-medium text-gray-500 uppercase tracking-wider">
@@ -1773,6 +1770,14 @@ const CustomerOrdersPage: React.FC = () => {
                           </div>
                         </div>
                       </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-[10px] text-gray-900">
+                        {order.my_status === 2 || order.my_status === 3 || order.my_status === 4
+                          ? order.driver_name || order.rider_name || '—'
+                          : ''}
+                      </td>
+                      <td className="px-4 py-2 text-[10px] text-gray-900 max-w-[14rem]">
+                        {order.my_status === 5 ? (order.cancellation_comment || '—') : ''}
+                      </td>
                       <td className="px-4 py-2 whitespace-nowrap">
                         {getMyStatusBadge(order.my_status, order.status)}
                       </td>
@@ -1855,6 +1860,17 @@ const CustomerOrdersPage: React.FC = () => {
                             >
                               Delivery Note
                             </button>
+                            {order.my_status === 4 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openDeliveryDetailsModal(order);
+                                }}
+                                className="px-2 py-1 text-[10px] font-medium rounded-md bg-green-50 border border-green-300 text-green-700 hover:bg-green-100"
+                              >
+                                Deliver Details
+                              </button>
+                            )}
                           </div>
                         ) : (
                           <span className="text-[10px] text-gray-400">—</span>
@@ -2549,7 +2565,7 @@ const CustomerOrdersPage: React.FC = () => {
                         {selectedOrder.driver_name ? 'Reassign Driver' : 'Assign Driver'}
                       </button>
                     )}
-                    {selectedOrder.my_status === 4 && (user?.role === 'stock' || user?.role === 'admin') && (
+                    {selectedOrder.my_status === 5 && (user?.role === 'stock' || user?.role === 'admin') && (
                       <button
                         type="button"
                         onClick={() => openReceiveToStockModal(selectedOrder)}
@@ -3139,9 +3155,9 @@ const CustomerOrdersPage: React.FC = () => {
         {/* Delivery Details Modal */}
         {showDeliveryDetailsModal && deliveryDetailsOrder && (
           <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-            <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-green-600">Delivery Details - Order {deliveryDetailsOrder.so_number}</h2>
+            <div className="relative top-6 mx-auto p-4 border w-11/12 max-w-5xl shadow-lg rounded-md bg-white">
+              <div className="flex justify-between items-center mb-3">
+                <h2 className="text-lg font-bold text-green-600">Delivery Details - Order {deliveryDetailsOrder.so_number}</h2>
                 <button
                   onClick={closeDeliveryDetailsModal}
                   className="text-gray-400 hover:text-gray-600"
@@ -3150,11 +3166,13 @@ const CustomerOrdersPage: React.FC = () => {
                 </button>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+                <div className="space-y-3">
                 {/* Order Information */}
-                <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="bg-gray-50 p-3 rounded-lg">
                   <h3 className="text-xs font-semibold text-gray-900 mb-3">Order Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Order Number</label>
                       <p className="text-sm text-gray-900">{deliveryDetailsOrder.so_number}</p>
@@ -3175,9 +3193,9 @@ const CustomerOrdersPage: React.FC = () => {
                 </div>
 
                 {/* Delivery Information */}
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <h3 className="text-xs font-semibold text-gray-900 mb-3">Delivery Information</h3>
-                  <div className="space-y-3">
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <h3 className="text-xs font-semibold text-gray-900 mb-2">Delivery Information</h3>
+                  <div className="grid grid-cols-2 gap-2">
                     {deliveryDetailsOrder.rider_name && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Rider</label>
@@ -3202,33 +3220,33 @@ const CustomerOrdersPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Delivery Notes */}
-                {deliveryDetailsOrder.delivery_notes && (
-                  <div className="bg-red-50 p-4 rounded-lg">
-                    <h3 className="text-xs font-semibold text-gray-900 mb-3">Delivery Notes</h3>
-                    <div className="bg-white p-3 rounded border">
-                      <p className="text-sm text-gray-900 whitespace-pre-wrap">{deliveryDetailsOrder.delivery_notes}</p>
+                </div>
+
+                {/* Delivery details */}
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <h3 className="text-xs font-semibold text-gray-900 mb-3">Delivery Details</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+                    <div>
+                      <p className="text-[10px] font-medium text-gray-500 uppercase">Recipient Name</p>
+                      <p className="text-sm font-semibold text-gray-900">{deliveryDetailsOrder.delivery_recipient_name || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium text-gray-500 uppercase">Recipient ID Number</p>
+                      <p className="text-sm font-semibold text-gray-900">{deliveryDetailsOrder.delivery_recipient_id_number || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium text-gray-500 uppercase">Delivery Time</p>
+                      <p className="text-sm font-semibold text-gray-900">{deliveryDetailsOrder.delivered_at ? formatDateTime(deliveryDetailsOrder.delivered_at) : '—'}</p>
                     </div>
                   </div>
-                )}
-
-                {/* Delivery Image */}
-                {deliveryDetailsOrder.delivery_image && (
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <h3 className="text-xs font-semibold text-gray-900 mb-3">Delivery Image</h3>
+                  <p className="text-[10px] font-medium text-gray-500 uppercase mb-1">Delivery Note Image</p>
+                  {deliveryDetailsOrder.delivery_note_url ? (
                     <div className="bg-white p-3 rounded border">
-                      <img 
-                        src={String(deliveryDetailsOrder.delivery_image).startsWith('http') 
-                          ? String(deliveryDetailsOrder.delivery_image) 
-                          : `/uploads/products/${deliveryDetailsOrder.delivery_image}`}
-                        alt="Delivery Image"
-                        className="max-w-full h-auto rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                        onClick={() => window.open(
-                          String(deliveryDetailsOrder.delivery_image).startsWith('http') 
-                            ? String(deliveryDetailsOrder.delivery_image) 
-                            : `/uploads/products/${deliveryDetailsOrder.delivery_image}`, 
-                          '_blank'
-                        )}
+                      <img
+                        src={deliveryImageSrc(deliveryDetailsOrder.delivery_note_url)}
+                        alt="Delivery note"
+                        className="max-w-full max-h-56 mx-auto rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                        onClick={() => window.open(deliveryImageSrc(deliveryDetailsOrder.delivery_note_url), '_blank')}
                         onError={(e) => {
                           const target = e.target as HTMLImageElement;
                           target.style.display = 'none';
@@ -3238,16 +3256,19 @@ const CustomerOrdersPage: React.FC = () => {
                           }
                         }}
                       />
-                      <p className="text-xs text-gray-500 mt-2">Click image to view full size</p>
+                      <p className="text-xs text-gray-500 mt-2 text-center">Click image to view full size</p>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <p className="text-sm text-gray-500 italic">No delivery note image was uploaded.</p>
+                  )}
+                </div>
+                </div>
 
                 {/* Order Items */}
                 {deliveryDetailsOrder.items && deliveryDetailsOrder.items.length > 0 && (
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h3 className="text-xs font-semibold text-gray-900 mb-3">Delivered Items</h3>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto max-h-40 overflow-y-auto">
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-100">
                           <tr>

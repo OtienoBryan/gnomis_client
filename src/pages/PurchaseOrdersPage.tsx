@@ -501,9 +501,6 @@ const PurchaseOrdersPage: React.FC = () => {
                     <th className="px-3 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">
                       Expected Delivery
                     </th>
-                    <th className="px-3 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">
-                      Items
-                    </th>
                     <th className="px-3 py-2 text-right text-[9px] font-medium text-gray-500 uppercase tracking-wider">
                       Total Amount
                     </th>
@@ -546,29 +543,6 @@ const PurchaseOrdersPage: React.FC = () => {
                         ) : (
                           <span className="text-xs text-gray-400">Not specified</span>
                         )}
-                      </td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <div className="text-xs text-gray-900">
-                          {po.items && po.items.length > 0 ? (
-                            <div>
-                              <span className="font-medium text-xs">{po.items.length}</span> <span className="text-[10px]">item{po.items.length !== 1 ? 's' : ''}</span>
-                              {po.items.length > 0 && (
-                                <div className="text-[9px] text-gray-500 mt-0.5">
-                                  {po.items.slice(0, 2).map((item, index) => (
-                                    <div key={index} className="truncate max-w-32">
-                                      {item.product?.product_name || `Item ${index + 1}`}
-                                    </div>
-                                  ))}
-                                  {po.items.length > 2 && (
-                                    <div className="text-gray-400">+{po.items.length - 2} more</div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-[10px] text-gray-400">No items</span>
-                          )}
-                        </div>
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap text-right">
                         <div className="text-xs text-gray-900 font-medium">{formatCurrency(po.total_amount)}</div>

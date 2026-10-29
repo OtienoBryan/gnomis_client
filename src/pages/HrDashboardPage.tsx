@@ -1,14 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { useRef, useCallback } from 'react';
-import { format } from 'date-fns';
+import { useCallback } from 'react';
 import {
+  format,
   startOfMonth,
   endOfMonth,
   startOfWeek,
   endOfWeek,
   addDays,
-  format as formatDate,
   isSameMonth,
   isSameDay,
   parseISO,
@@ -16,13 +15,12 @@ import {
   subMonths,
 } from 'date-fns';
 import { API_CONFIG } from '../config/api';
-import { 
-  TrendingUpIcon, 
-  UsersIcon, 
-  FileTextIcon, 
-  AlertTriangleIcon, 
-  CalendarIcon, 
-  ChevronLeftIcon, 
+import {
+  UsersIcon,
+  FileTextIcon,
+  AlertTriangleIcon,
+  CalendarIcon,
+  ChevronLeftIcon,
   ChevronRightIcon,
   MessageCircleIcon,
   ClockIcon,
@@ -30,608 +28,572 @@ import {
   UserXIcon,
   BuildingIcon,
   BriefcaseIcon,
-  ClipboardListIcon,
-  SettingsIcon,
-  EyeIcon,
   PlusIcon,
   Trash2Icon,
-  CheckCircleIcon,
-  XCircleIcon
+  ArrowUpRightIcon,
+  PercentIcon,
+  InboxIcon
 } from 'lucide-react';
 import io from 'socket.io-client';
 
 const SOCKET_URL = API_CONFIG.getSocketUrl();
 
+type Tone = 'red' | 'green' | 'amber' | 'blue' | 'purple' | 'cyan' | 'pink' | 'slate' | 'teal' | 'orange';
+
+const TONES: Record<Tone, { chip: string; bar: string }> = {
+  red: { chip: 'bg-red-50 text-red-600', bar: 'bg-red-500' },
+  green: { chip: 'bg-emerald-50 text-emerald-600', bar: 'bg-emerald-500' },
+  amber: { chip: 'bg-amber-50 text-amber-600', bar: 'bg-amber-500' },
+  blue: { chip: 'bg-blue-50 text-blue-600', bar: 'bg-blue-500' },
+  purple: { chip: 'bg-purple-50 text-purple-600', bar: 'bg-purple-500' },
+  cyan: { chip: 'bg-cyan-50 text-cyan-600', bar: 'bg-cyan-500' },
+  pink: { chip: 'bg-pink-50 text-pink-600', bar: 'bg-pink-500' },
+  slate: { chip: 'bg-slate-100 text-slate-600', bar: 'bg-slate-500' },
+  teal: { chip: 'bg-teal-50 text-teal-600', bar: 'bg-teal-500' },
+  orange: { chip: 'bg-orange-50 text-orange-600', bar: 'bg-orange-500' }
+};
+
 interface StatCardProps {
   title: string;
   value: string | number;
   icon: React.ReactNode;
-  change?: {
-    value: number;
-    positive: boolean;
-  };
-  prefix?: string;
-  suffix?: string;
-  bgColor?: string;
-  textColor?: string;
+  gradient: string;
+  subText?: string;
   onClick?: () => void;
-  badge?: React.ReactNode;
 }
 
-const StatCard: React.FC<StatCardProps> = ({
-  title,
-  value,
-  icon,
-  change,
-  prefix = '',
-  suffix = '',
-  bgColor = 'bg-gradient-to-r from-red-600 to-red-700',
-  textColor = 'text-white',
-  onClick,
-  badge
-}) => {
-  return (
-    <div className="relative">
-      <div
-        className={`${bgColor} overflow-hidden shadow-lg rounded-xl cursor-pointer transform transition-all duration-200 hover:scale-105 hover:shadow-xl`}
-        onClick={onClick}
-        role={onClick ? 'button' : undefined}
-        tabIndex={onClick ? 0 : undefined}
-      >
-        <div className="p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className={`text-xs font-medium ${textColor} opacity-90`}>
-                {title}
-              </p>
-              <p className={`text-lg font-bold ${textColor} mt-0.5`}>
-                {prefix}{value}{suffix}
-              </p>
-              {change && (
-                <div className="flex items-center mt-1">
-                  <TrendingUpIcon 
-                    className={`h-3 w-3 ${change.positive ? 'text-green-300' : 'text-red-300'}`} 
-                  />
-                  <span className={`text-xs font-medium ml-1 ${change.positive ? 'text-green-300' : 'text-red-300'}`}>
-                    {change.positive ? '+' : ''}{change.value}%
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="flex-shrink-0">
-              <div className={`p-2 rounded-lg ${textColor} bg-white bg-opacity-20`}>
-                {icon}
-              </div>
-            </div>
+const StatCard: React.FC<StatCardProps> = ({ title, value, icon, gradient, subText, onClick }) => (
+  <div
+    className={`relative overflow-hidden rounded-xl sm:rounded-2xl shadow-md cursor-pointer group transition-all duration-200 active:scale-95 sm:hover:-translate-y-1 sm:hover:shadow-xl ${gradient}`}
+    onClick={onClick}
+    role={onClick ? 'button' : undefined}
+    tabIndex={onClick ? 0 : undefined}
+  >
+    {/* Background decoration */}
+    <div className="absolute -right-3 -top-3 w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-white opacity-10" />
+    <div className="absolute -right-1 -bottom-4 w-20 h-20 sm:w-28 sm:h-28 rounded-full bg-white opacity-5" />
+
+    <div className="relative p-2.5 sm:p-3">
+      <div className="flex items-start justify-between">
+        <div className="flex-1 min-w-0 pr-1">
+          <p className="text-[9px] sm:text-[10px] font-semibold text-white/80 uppercase tracking-widest mb-0.5 truncate">
+            {title}
+          </p>
+          <p className="text-lg sm:text-xl font-bold text-white leading-tight truncate">{value}</p>
+          {subText && (
+            <p className="text-[9px] sm:text-[10px] text-white/70 mt-0.5 line-clamp-1">{subText}</p>
+          )}
+        </div>
+        <div className="flex-shrink-0 ml-1 sm:ml-2">
+          <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-white/20 flex items-center justify-center group-hover:bg-white/30 transition-colors">
+            {icon}
           </div>
         </div>
       </div>
-      {badge && (
-        <div className="absolute -top-2 -right-2">
-          {badge}
+      {onClick && (
+        <div className="flex items-center mt-1.5 sm:mt-2 text-white/70 group-hover:text-white transition-colors">
+          <span className="text-[8px] sm:text-[9px] font-medium">View details</span>
+          <ArrowUpRightIcon className="h-2 w-2 sm:h-2.5 sm:w-2.5 ml-0.5" />
         </div>
       )}
     </div>
-  );
-};
+  </div>
+);
 
 const HrDashboardPage: React.FC = () => {
-    const [attendance, setAttendance] = useState<any[]>([]);
-    const [staff, setStaff] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [expiringContracts, setExpiringContracts] = useState<any[]>([]);
-    const [hasNewChatMessage, setHasNewChatMessage] = useState(() => {
-        return localStorage.getItem('hasNewChatMessage') === 'true';
-    });
-    const navigate = useNavigate();
-    const location = useLocation();
-    const socketRef = React.useRef<any>(null);
+  const [attendance, setAttendance] = useState<any[]>([]);
+  const [staff, setStaff] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expiringContracts, setExpiringContracts] = useState<any[]>([]);
+  const [hasNewChatMessage, setHasNewChatMessage] = useState(() => {
+    return localStorage.getItem('hasNewChatMessage') === 'true';
+  });
+  const navigate = useNavigate();
+  const location = useLocation();
+  const socketRef = React.useRef<any>(null);
 
-    // Calendar/task state
-    const [currentMonth, setCurrentMonth] = useState(new Date());
-    const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-    const [tasks, setTasks] = useState<{ [date: string]: { id: number; text: string }[] }>({});
-    const [newTask, setNewTask] = useState('');
-    const nextTaskId = useRef(1);
+  // Calendar/task state
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [tasks, setTasks] = useState<{ [date: string]: { id: number; text: string }[] }>({});
+  const [newTask, setNewTask] = useState('');
 
-    // Calendar grid logic
-    const monthStart = startOfMonth(currentMonth);
-    const monthEnd = endOfMonth(monthStart);
-    const weekStart = startOfWeek(monthStart, { weekStartsOn: 1 }); // Monday
-    const weekEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
-    const calendarRows: Date[][] = [];
-    let day = weekStart;
-    while (day <= weekEnd) {
-      const week: Date[] = [];
-      for (let i = 0; i < 7; i++) {
-        week.push(day);
-        day = addDays(day, 1);
+  // Calendar grid logic
+  const monthKey = format(currentMonth, 'yyyy-MM');
+  const monthStart = startOfMonth(currentMonth);
+  const monthEnd = endOfMonth(monthStart);
+  const weekStart = startOfWeek(monthStart, { weekStartsOn: 1 }); // Monday
+  const weekEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  const calendarRows: Date[][] = [];
+  let day = weekStart;
+  while (day <= weekEnd) {
+    const week: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      week.push(day);
+      day = addDays(day, 1);
+    }
+    calendarRows.push(week);
+  }
+
+  // Custom fetch function to avoid axios
+  const fetchData = async (endpoint: string) => {
+    const url = API_CONFIG.getUrl(endpoint);
+    const response = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
-      calendarRows.push(week);
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    // Custom fetch function to avoid axios
-    const fetchData = async (endpoint: string) => {
-      const url = API_CONFIG.getUrl(endpoint);
-      const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      return response.json();
-    };
+    return response.json();
+  };
 
-    useEffect(() => {
-        const loadDashboardData = async () => {
-            setLoading(true);
-            try {
-                const [attendanceData, staffData, contractsData] = await Promise.all([
-                    fetchData('/attendance/today'),
-                    fetchData('/staff'),
-                    fetchData('/staff/contracts/expiring')
-                ]);
-                setAttendance(attendanceData);
-                setStaff(staffData);
-                setExpiringContracts(contractsData);
-            } catch (error) {
-                console.error('Error fetching dashboard data:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadDashboardData();
-    }, []);
-
-    // Listen for new chat messages
-    useEffect(() => {
-        const socket = io(SOCKET_URL);
-        socketRef.current = socket;
-        socket.on('newMessage', (msg: any) => {
-            if (location.pathname !== '/chat-room') {
-                setHasNewChatMessage(true);
-                localStorage.setItem('hasNewChatMessage', 'true');
-            }
-        });
-        return () => { socket.disconnect(); };
-    }, [location.pathname]);
-
-    // Clear notification when visiting chat room
-    useEffect(() => {
-        if (location.pathname === '/chat-room') {
-            setHasNewChatMessage(false);
-            localStorage.setItem('hasNewChatMessage', 'false');
-        }
-    }, [location.pathname]);
-
-    // Fetch tasks for the current month
-    const fetchTasks = useCallback(async () => {
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      setLoading(true);
       try {
-        const month = format(monthStart, 'yyyy-MM');
-        const data = await fetchData(`/calendar-tasks?month=${month}`);
-        const grouped: { [date: string]: { id: number; text: string }[] } = {};
-        for (const t of data) {
-          const dateKey = t.date.slice(0, 10);
-          if (!grouped[dateKey]) grouped[dateKey] = [];
-          grouped[dateKey].push({ id: t.id, text: t.title });
-        }
-        setTasks(grouped);
+        const [attendanceData, staffData, contractsData] = await Promise.all([
+          fetchData('/attendance/today'),
+          fetchData('/staff'),
+          fetchData('/staff/contracts/expiring')
+        ]);
+        setAttendance(attendanceData);
+        setStaff(staffData);
+        setExpiringContracts(contractsData);
       } catch (error) {
-        console.error('Error fetching tasks:', error);
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
       }
-    }, [monthStart]);
-
-    useEffect(() => {
-      fetchTasks();
-    }, [fetchTasks]);
-
-    const checkedInCount = attendance.filter(a => a.checkin_time).length;
-    const totalCount = staff.length;
-    const attendancePercentage = totalCount > 0 ? Math.round((checkedInCount / totalCount) * 100) : 0;
-
-    const handlePrevMonth = () => {
-      setCurrentMonth(subMonths(currentMonth, 1));
     };
+    loadDashboardData();
+  }, []);
 
-    const handleNextMonth = () => {
-      setCurrentMonth(addMonths(currentMonth, 1));
-    };
+  // Listen for new chat messages
+  useEffect(() => {
+    const socket = io(SOCKET_URL);
+    socketRef.current = socket;
+    socket.on('newMessage', () => {
+      if (location.pathname !== '/chat-room') {
+        setHasNewChatMessage(true);
+        localStorage.setItem('hasNewChatMessage', 'true');
+      }
+    });
+    return () => { socket.disconnect(); };
+  }, [location.pathname]);
 
-    const navigationItems = [
-      { to: '/dashboard/staff-list', label: 'Staff List', icon: <UsersIcon className="h-3 w-3" />, color: 'bg-red-100 text-red-700 hover:bg-red-200' },
-      { to: '/document-list', label: 'Documents', icon: <FileTextIcon className="h-3 w-3" />, color: 'bg-green-100 text-green-700 hover:bg-green-200' },
-      { to: '/dashboard/expiring-contracts', label: 'Expiring Contracts', icon: <AlertTriangleIcon className="h-3 w-3" />, color: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
-      { to: '/dashboard/employee-leaves', label: 'Employee Leaves', icon: <CalendarIcon className="h-3 w-3" />, color: 'bg-purple-100 text-purple-700 hover:bg-purple-200' },
-      { to: '/dashboard/leave-report', label: 'Leave Report', icon: <FileTextIcon className="h-3 w-3" />, color: 'bg-violet-100 text-violet-700 hover:bg-violet-200' },
-      //{ to: '/attendance-history', label: 'Attendance History', icon: <ClockIcon className="h-3 w-3" />, color: 'bg-red-100 text-red-700 hover:bg-red-200' },
-      { to: '/employee-working-hours', label: 'Attendance History', icon: <ClockIcon className="h-3 w-3" />, color: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' },
-      { to: '/employee-working-days', label: 'Working Days', icon: <CalendarIcon className="h-3 w-3" />, color: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' },
-      { to: '/public-holidays', label: 'Public Holidays', icon: <CalendarIcon className="h-3 w-3" />, color: 'bg-orange-100 text-orange-700 hover:bg-orange-200' },
-      { to: '/out-of-office-requests', label: 'Out of Office', icon: <UserXIcon className="h-3 w-3" />, color: 'bg-pink-100 text-pink-700 hover:bg-pink-200' },
-      { to: '/sales-reps', label: 'Sales reps', icon: <BuildingIcon className="h-3 w-3" />, color: 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200' },
-      //{ to: '/positions', label: 'Positions', icon: <BriefcaseIcon className="h-3 w-3" />, color: 'bg-orange-100 text-orange-700 hover:bg-orange-200' },
-      //{ to: '/payroll', label: 'Payroll', icon: <ClipboardListIcon className="h-3 w-3" />, color: 'bg-red-100 text-red-700 hover:bg-red-200' },
-      { to: '/department-expenses/upload', label: 'Dept Expenses', icon: <BriefcaseIcon className="h-3 w-3" />, color: 'bg-slate-100 text-slate-700 hover:bg-slate-200' },
-      { to: '/instant-chat', label: 'Chat Room', icon: <MessageCircleIcon className="h-3 w-3" />, color: 'bg-teal-100 text-teal-700 hover:bg-teal-200' },
-      //{ to: '/settings', label: 'Settings', icon: <SettingsIcon className="h-3 w-3" />, color: 'bg-gray-100 text-gray-700 hover:bg-gray-200' }
-    ];
+  // Clear notification when visiting chat room
+  useEffect(() => {
+    if (location.pathname === '/chat-room') {
+      setHasNewChatMessage(false);
+      localStorage.setItem('hasNewChatMessage', 'false');
+    }
+  }, [location.pathname]);
 
-    return (
-        <div className="min-h-screen bg-gray-50">
-            <div className="max-w-8xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
-                {/* Header */}
-                <div className="mb-1">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h1 className="text-xl font-bold text-gray-900 mb-1">HR Dashboard</h1>
-                            <p className="text-xs text-gray-600">Manage employees, track attendance, and handle HR operations</p>
-                        </div>
-                        <div className="flex items-center space-x-1 bg-white rounded-lg px-2 py-1 shadow-sm border border-gray-200">
-                            <CalendarIcon className="h-3 w-3 text-gray-500" />
-                            <span className="text-xs font-medium text-gray-700">
-                                {format(new Date(), 'EEEE, MMMM d, yyyy')}
-                            </span>
-                        </div>
-                    </div>
-                </div>
+  // Fetch tasks for the current month (keyed on the month string so it only runs when the month changes)
+  const fetchTasks = useCallback(async () => {
+    try {
+      const data = await fetchData(`/calendar-tasks?month=${monthKey}`);
+      const grouped: { [date: string]: { id: number; text: string }[] } = {};
+      for (const t of data) {
+        const dateKey = t.date.slice(0, 10);
+        if (!grouped[dateKey]) grouped[dateKey] = [];
+        grouped[dateKey].push({ id: t.id, text: t.title });
+      }
+      setTasks(grouped);
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+    }
+  }, [monthKey]);
 
-                {/* Navigation Menu */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 mb-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-2">
-                        {navigationItems.map((item, index) => (
-                            <Link
-                                key={index}
-                                to={item.to}
-                                className={`${item.color} flex flex-col items-center justify-center p-2 rounded-lg font-medium text-xs transition-all duration-200 hover:scale-105 hover:shadow-md`}
-                            >
-                                {item.icon}
-                                <span className="mt-1 text-center">{item.label}</span>
-                            </Link>
-                        ))}
-                    </div>
-                </div>
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
 
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4 opacity-65">
-                    <StatCard
-                        title="Total Employees"
-                        value={totalCount}
-                        icon={<UsersIcon className="h-4 w-4" />}
-                        bgColor="bg-gradient-to-r from-red-600 to-red-700"
-                        onClick={() => navigate('/dashboard/staff-list')}
-                    />
-                    
-                    <StatCard
-                        title="Present Today"
-                        value={checkedInCount}
-                        suffix={`/ ${totalCount}`}
-                        icon={<UserCheckIcon className="h-4 w-4" />}
-                        bgColor="bg-gradient-to-r from-green-600 to-green-700"
-                        onClick={() => navigate('/attendance-history')}
-                    />
+  const checkedIn = useMemo(() => attendance.filter(a => a.checkin_time), [attendance]);
+  const checkedInCount = checkedIn.length;
+  const totalCount = staff.length;
+  const attendancePercentage = totalCount > 0 ? Math.round((checkedInCount / totalCount) * 100) : 0;
+  const absentCount = Math.max(0, totalCount - checkedInCount);
 
-                    <StatCard
-                        title="Attendance Rate"
-                        value={attendancePercentage}
-                        suffix="%"
-                        icon={<TrendingUpIcon className="h-4 w-4" />}
-                        bgColor="bg-gradient-to-r from-red-600 to-red-700"
-                        onClick={() => navigate('/attendance-history')}
-                    />
+  const handlePrevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
+  const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
 
-                    <StatCard
-                        title="Expiring Contracts"
-                        value={expiringContracts.length}
-                        icon={<AlertTriangleIcon className="h-4 w-4" />}
-                        bgColor="bg-gradient-to-r from-amber-600 to-amber-700"
-                        onClick={() => navigate('/dashboard/expiring-contracts')}
-                        badge={expiringContracts.length > 0 && (
-                            <span className="h-3 w-3 bg-red-500 rounded-full flex items-center justify-center">
-                                <span className="text-white text-[10px] font-bold">{expiringContracts.length}</span>
-                            </span>
-                        )}
-                    />
-                </div>
+  const navigationItems: { to: string; label: string; icon: React.ReactNode; tone: Tone }[] = [
+    { to: '/dashboard/staff-list', label: 'Staff List', icon: <UsersIcon className="h-4 w-4" />, tone: 'red' },
+    { to: '/document-list', label: 'Documents', icon: <FileTextIcon className="h-4 w-4" />, tone: 'green' },
+    { to: '/dashboard/expiring-contracts', label: 'Expiring Contracts', icon: <AlertTriangleIcon className="h-4 w-4" />, tone: 'amber' },
+    { to: '/dashboard/employee-leaves', label: 'Employee Leaves', icon: <CalendarIcon className="h-4 w-4" />, tone: 'purple' },
+    { to: '/dashboard/leave-report', label: 'Leave Report', icon: <FileTextIcon className="h-4 w-4" />, tone: 'blue' },
+    { to: '/employee-working-hours', label: 'Attendance History', icon: <ClockIcon className="h-4 w-4" />, tone: 'green' },
+    { to: '/employee-working-days', label: 'Working Days', icon: <CalendarIcon className="h-4 w-4" />, tone: 'amber' },
+    { to: '/public-holidays', label: 'Public Holidays', icon: <CalendarIcon className="h-4 w-4" />, tone: 'orange' },
+    { to: '/out-of-office-requests', label: 'Out of Office', icon: <UserXIcon className="h-4 w-4" />, tone: 'pink' },
+    { to: '/sales-reps', label: 'Sales Reps', icon: <BuildingIcon className="h-4 w-4" />, tone: 'cyan' },
+    { to: '/department-expenses/upload', label: 'Dept Expenses', icon: <BriefcaseIcon className="h-4 w-4" />, tone: 'slate' },
+    { to: '/instant-chat', label: 'Chat Room', icon: <MessageCircleIcon className="h-4 w-4" />, tone: 'teal' }
+  ];
 
-                {/* Main Content */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    {/* Attendance Section */}
-                    <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <div className="p-4">
-                            <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-base font-semibold text-gray-900">Today's Attendance</h2>
-                                <div className="flex gap-1">
-                                    <button
-                                        className="px-2 py-1 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center gap-1"
-                                        onClick={() => navigate('/attendance-history')}
-                                    >
-                                        <EyeIcon className="h-3 w-3" />
-                                        View History
-                                    </button>
-                                    <button
-                                        className="px-2 py-1 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1"
-                                        onClick={() => navigate('/employee-working-hours')}
-                                    >
-                                        <ClockIcon className="h-3 w-3" />
-                                        Working Hours
-                                    </button>
-                                    <button
-                                        className="px-2 py-1 bg-yellow-600 text-white text-xs font-medium rounded-lg hover:bg-yellow-700 transition-colors flex items-center gap-1"
-                                        onClick={() => navigate('/employee-working-days')}
-                                    >
-                                        <CalendarIcon className="h-3 w-3" />
-                                        Working Days
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            {loading ? (
-                                <div className="flex justify-center items-center h-32">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
-                                </div>
-                            ) : (
-                                <>
-                                    {/* Attendance Summary Cards */}
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-                                        <div className="bg-green-50 rounded-lg p-3 border border-green-200">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-xs text-green-600 font-medium">Present</p>
-                                                    <p className="text-lg font-bold text-green-700">{checkedInCount}</p>
-                                                </div>
-                                                <CheckCircleIcon className="h-5 w-5 text-green-600" />
-                                            </div>
-                                        </div>
-                                        <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-xs text-gray-600 font-medium">Total Staff</p>
-                                                    <p className="text-lg font-bold text-gray-700">{totalCount}</p>
-                                                </div>
-                                                <UsersIcon className="h-5 w-5 text-gray-600" />
-                                            </div>
-                                        </div>
-                                        <div className="bg-red-50 rounded-lg p-3 border border-red-200">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-xs text-red-600 font-medium">Attendance Rate</p>
-                                                    <p className="text-lg font-bold text-red-700">{attendancePercentage}%</p>
-                                                </div>
-                                                <TrendingUpIcon className="h-5 w-5 text-red-600" />
-                                            </div>
-                                        </div>
-                                    </div>
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
-                                    <div className="overflow-x-auto">
-                                        <table className="min-w-full divide-y divide-gray-200">
-                                            <thead className="bg-gray-50">
-                                                <tr>
-                                                    <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                                    <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Department</th>
-                                                    <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Check-in</th>
-                                                    <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Check-out</th>
-                                                    <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Hours</th>
-                                                    <th className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="bg-white divide-y divide-gray-200">
-                                                {attendance.filter(a => a.checkin_time).map(a => {
-                                                    const checkin = a.checkin_time ? new Date(a.checkin_time) : null;
-                                                    const checkout = a.checkout_time ? new Date(a.checkout_time) : null;
-                                                    let timeSpent = '';
-                                                    if (checkin) {
-                                                        const end = checkout || new Date();
-                                                        const diffMs = end.getTime() - checkin.getTime();
-                                                        const hours = Math.floor(diffMs / (1000 * 60 * 60));
-                                                        const mins = Math.floor((diffMs / (1000 * 60)) % 60);
-                                                        timeSpent = `${hours}h ${mins}m`;
-                                                    }
-                                                    return (
-                                                        <tr key={a.id} className="hover:bg-gray-50 transition-colors">
-                                                            <td className="px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-900">{a.name || a.staff_id}</td>
-                                                            <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">{a.department || '-'}</td>
-                                                            <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
-                                                                {checkin ? checkin.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
-                                                            </td>
-                                                            <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
-                                                                {checkout ? checkout.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
-                                                            </td>
-                                                            <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
-                                                                <span className="px-1.5 inline-flex text-[10px] leading-4 font-semibold rounded-full bg-green-100 text-green-800">
-                                                                    {timeSpent}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-3 py-2 whitespace-nowrap">
-                                                                <span className="px-1.5 inline-flex text-[10px] leading-4 font-semibold rounded-full bg-green-100 text-green-800">
-                                                                    Present
-                                                                </span>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                                {attendance.filter(a => a.checkin_time).length === 0 && (
-                                                    <tr>
-                                                        <td colSpan={6} className="px-3 py-4 text-center text-xs text-gray-500">
-                                                            <div className="flex flex-col items-center">
-                                                                <XCircleIcon className="h-8 w-8 text-gray-300 mb-1" />
-                                                                No check-ins recorded for today.
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </div>
+  const formatHours = (checkin: Date, checkout: Date | null) => {
+    const end = checkout || new Date();
+    const diffMs = Math.max(0, end.getTime() - checkin.getTime());
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const mins = Math.floor((diffMs / (1000 * 60)) % 60);
+    return `${hours}h ${mins}m`;
+  };
 
-                    {/* Calendar & Tasks Section */}
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <div className="p-4">
-                            <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-base font-semibold text-gray-900">Calendar & Tasks</h2>
-                                <div className="relative">
-                                    <button
-                                        onClick={() => navigate('/chat-room')}
-                                        className="flex items-center space-x-1 px-2 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
-                                    >
-                                        <MessageCircleIcon className="h-3 w-3" />
-                                        {hasNewChatMessage && (
-                                            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-red-500"></span>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
+  const selectedTasks = tasks[selectedDate] ?? [];
 
-                            {/* Calendar Header */}
-                            <div className="flex items-center justify-between mb-3">
-                                <button
-                                    onClick={handlePrevMonth}
-                                    className="p-1 rounded-lg hover:bg-gray-100 transition-colors"
-                                >
-                                    <ChevronLeftIcon className="h-3 w-3 text-gray-600" />
-                                </button>
-                                <h3 className="text-sm font-semibold text-gray-700">
-                                    {formatDate(currentMonth, 'MMMM yyyy')}
-                                </h3>
-                                <button
-                                    onClick={handleNextMonth}
-                                    className="p-1 rounded-lg hover:bg-gray-100 transition-colors"
-                                >
-                                    <ChevronRightIcon className="h-3 w-3 text-gray-600" />
-                                </button>
-                            </div>
-
-                            {/* Calendar Grid */}
-                            <div className="mb-4">
-                                <div className="grid grid-cols-7 gap-0.5 text-center text-xs font-medium text-gray-500 mb-1">
-                                    {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-                                        <div key={i} className="h-5 flex items-center justify-center">{d}</div>
-                                    ))}
-                                </div>
-                                <div className="grid grid-cols-7 gap-0.5">
-                                    {calendarRows.flat().map((date, idx) => {
-                                        const dateStr = formatDate(date, 'yyyy-MM-dd');
-                                        const hasTasks = (tasks[dateStr]?.length ?? 0) > 0;
-                                        const isSelected = selectedDate === dateStr;
-                                        const isCurrentMonth = isSameMonth(date, monthStart);
-                                        const isToday = isSameDay(date, new Date());
-                                        
-                                        return (
-                                            <button
-                                                key={dateStr + idx}
-                                                className={`relative h-7 rounded flex flex-col items-center justify-center text-xs transition-all duration-200
-                                                    ${isSelected ? 'bg-red-600 text-white shadow-lg' : 
-                                                       hasTasks ? 'bg-red-100 text-red-900 hover:bg-red-200' : 
-                                                       !isCurrentMonth ? 'text-gray-300' : 'hover:bg-gray-100'}
-                                                    ${isToday && !isSelected ? 'ring-1 ring-red-500' : ''}`}
-                                                onClick={() => setSelectedDate(dateStr)}
-                                            >
-                                                {date.getDate()}
-                                                {hasTasks && !isSelected && (
-                                                    <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-red-500"></span>
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            {/* Selected Date Tasks */}
-                            <div className="border-t pt-3">
-                                <h3 className="text-xs font-medium text-gray-700 mb-2">
-                                    Tasks for {formatDate(parseISO(selectedDate), 'MMMM d, yyyy')}
-                                </h3>
-                                
-                                {/* Add Task Form */}
-                                <form
-                                    className="flex gap-1 mb-3"
-                                    onSubmit={async e => {
-                                        e.preventDefault();
-                                        if (!newTask.trim()) return;
-                                        try {
-                                            const response = await fetch(API_CONFIG.getUrl('/calendar-tasks'), {
-                                                method: 'POST',
-                                                headers: { 
-                                                    'Content-Type': 'application/json',
-                                                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                                                },
-                                                body: JSON.stringify({ date: selectedDate, title: newTask })
-                                            });
-                                            if (response.ok) {
-                                                fetchTasks();
-                                                setNewTask('');
-                                            }
-                                        } catch (error) {
-                                            console.error('Error adding task:', error);
-                                        }
-                                    }}
-                                >
-                                    <input
-                                        type="text"
-                                        className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
-                                        placeholder="Add a new task..."
-                                        value={newTask}
-                                        onChange={e => setNewTask(e.target.value)}
-                                    />
-                                    <button
-                                        type="submit"
-                                        className="bg-red-600 text-white px-2 py-1 rounded-lg hover:bg-red-700 transition-colors text-xs font-medium flex items-center gap-1"
-                                    >
-                                        <PlusIcon className="h-3 w-3" />
-                                        Add
-                                    </button>
-                                </form>
-
-                                {/* Tasks List */}
-                                <div className="space-y-1 max-h-32 overflow-y-auto">
-                                    {(tasks[selectedDate]?.length ?? 0) === 0 ? (
-                                        <div className="text-center py-2 text-gray-400 text-xs">
-                                            <CalendarIcon className="h-5 w-5 mx-auto mb-1 text-gray-300" />
-                                            No tasks scheduled for this day.
-                                        </div>
-                                    ) : (
-                                        tasks[selectedDate].map(task => (
-                                            <div key={task.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-2 py-1 hover:bg-gray-100 transition-colors">
-                                                <span className="text-xs text-gray-700">{task.text}</span>
-                                                <button
-                                                    className="text-red-500 hover:text-red-700 text-xs p-0.5 rounded transition-colors"
-                                                    onClick={async () => {
-                                                        try {
-                                                            const response = await fetch(API_CONFIG.getUrl(`/calendar-tasks/${task.id}`), { 
-                                                                method: 'DELETE',
-                                                                headers: {
-                                                                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                                                                }
-                                                            });
-                                                            if (response.ok) {
-                                                                fetchTasks();
-                                                            }
-                                                        } catch (error) {
-                                                            console.error('Error deleting task:', error);
-                                                        }
-                                                    }}
-                                                >
-                                                    <Trash2Icon className="h-3 w-3" />
-                                                </button>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+  return (
+    <div className="min-h-screen bg-gray-50 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="w-full">
+        {/* Header */}
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-red-600">{greeting}</p>
+            <h1 className="mt-0.5 text-2xl font-semibold tracking-tight text-gray-900">HR Dashboard</h1>
+            <p className="mt-1 text-sm text-gray-500">Employees, attendance and HR operations at a glance.</p>
+          </div>
+          <div className="inline-flex items-center gap-2 self-start rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm sm:self-auto">
+            <CalendarIcon className="h-4 w-4 text-gray-400" />
+            {format(new Date(), 'EEEE, MMMM d, yyyy')}
+          </div>
         </div>
-    );
+
+        {/* Stat cards */}
+        <div className="mb-5 grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+          <StatCard
+            title="Total Employees"
+            value={loading ? '–' : totalCount}
+            icon={<UsersIcon className="h-4 w-4 text-white" />}
+            gradient="bg-gradient-to-br from-red-500 to-red-700"
+            subText="Active staff records"
+            onClick={() => navigate('/dashboard/staff-list')}
+          />
+          <StatCard
+            title="Present Today"
+            value={loading ? '–' : `${checkedInCount} / ${totalCount}`}
+            icon={<UserCheckIcon className="h-4 w-4 text-white" />}
+            gradient="bg-gradient-to-br from-emerald-500 to-emerald-700"
+            subText="Checked in so far"
+            onClick={() => navigate('/attendance-history')}
+          />
+          <StatCard
+            title="Attendance Rate"
+            value={loading ? '–' : `${attendancePercentage}%`}
+            icon={<PercentIcon className="h-4 w-4 text-white" />}
+            gradient="bg-gradient-to-br from-purple-500 to-purple-700"
+            subText="Of all employees"
+            onClick={() => navigate('/attendance-history')}
+          />
+          <StatCard
+            title="Expiring Contracts"
+            value={loading ? '–' : expiringContracts.length}
+            icon={<AlertTriangleIcon className="h-4 w-4 text-white" />}
+            gradient="bg-gradient-to-br from-amber-500 to-amber-700"
+            subText={expiringContracts.length > 0 ? 'Needs your attention' : 'Nothing expiring soon'}
+            onClick={() => navigate('/dashboard/expiring-contracts')}
+          />
+        </div>
+
+        {/* Quick links */}
+        <section className="mb-6">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Quick links</h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+            {navigationItems.map(item => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm transition hover:border-gray-300 hover:shadow-md"
+              >
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${TONES[item.tone].chip}`}>
+                  {item.icon}
+                </span>
+                <span className="text-sm font-medium leading-tight text-gray-700 group-hover:text-gray-900">{item.label}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        {/* Main content */}
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          {/* Attendance */}
+          <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm xl:col-span-2">
+            <div className="flex flex-col gap-3 border-b border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900">Today's attendance</h2>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  {loading
+                    ? 'Loading…'
+                    : `${checkedInCount} checked in · ${absentCount} not yet in`}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-red-600 px-3 text-xs font-medium text-white transition hover:bg-red-700"
+                  onClick={() => navigate('/attendance-history')}
+                >
+                  History
+                </button>
+                <button
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                  onClick={() => navigate('/employee-working-hours')}
+                >
+                  <ClockIcon className="h-3.5 w-3.5" />
+                  Working hours
+                </button>
+                <button
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+                  onClick={() => navigate('/employee-working-days')}
+                >
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  Working days
+                </button>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="divide-y divide-gray-100">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex animate-pulse items-center gap-4 px-4 py-4">
+                    <div className="h-3 w-32 rounded bg-gray-100" />
+                    <div className="h-3 w-20 rounded bg-gray-100" />
+                    <div className="ml-auto h-3 w-40 rounded bg-gray-100" />
+                  </div>
+                ))}
+              </div>
+            ) : checkedIn.length === 0 ? (
+              <div className="px-4 py-14 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                  <InboxIcon className="h-6 w-6 text-gray-400" />
+                </div>
+                <h3 className="text-sm font-medium text-gray-900">No check-ins yet</h3>
+                <p className="mt-1 text-sm text-gray-500">Check-ins recorded today will appear here.</p>
+              </div>
+            ) : (
+              <div className="max-h-[480px] overflow-auto">
+                <table className="min-w-full">
+                  <thead className="sticky top-0 bg-gray-50/90 backdrop-blur">
+                    <tr className="text-left text-xs font-medium uppercase tracking-wide text-gray-500">
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">Department</th>
+                      <th className="px-4 py-3">Check-in</th>
+                      <th className="px-4 py-3">Check-out</th>
+                      <th className="px-4 py-3">Hours</th>
+                      <th className="px-4 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {checkedIn.map(a => {
+                      const checkin = new Date(a.checkin_time);
+                      const checkout = a.checkout_time ? new Date(a.checkout_time) : null;
+                      const time = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      return (
+                        <tr key={a.id} className="transition-colors hover:bg-gray-50/70">
+                          <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{a.name || a.staff_id}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{a.department || '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{time(checkin)}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{checkout ? time(checkout) : '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{formatHours(checkin, checkout)}</td>
+                          <td className="whitespace-nowrap px-4 py-3">
+                            {checkout ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+                                <span className="h-1.5 w-1.5 rounded-full bg-gray-400" />
+                                Checked out
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                Present
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* Calendar & tasks */}
+          <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-100 p-4">
+              <h2 className="text-base font-semibold text-gray-900">Calendar & tasks</h2>
+              <button
+                onClick={() => navigate('/chat-room')}
+                className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition hover:bg-gray-50"
+                aria-label="Open chat room"
+              >
+                <MessageCircleIcon className="h-4 w-4" />
+                {hasNewChatMessage && (
+                  <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />
+                )}
+              </button>
+            </div>
+
+            <div className="p-4">
+              {/* Month header */}
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-800">{format(currentMonth, 'MMMM yyyy')}</h3>
+                <div className="flex gap-1">
+                  <button
+                    onClick={handlePrevMonth}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100"
+                    aria-label="Previous month"
+                  >
+                    <ChevronLeftIcon className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={handleNextMonth}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-500 transition hover:bg-gray-100"
+                    aria-label="Next month"
+                  >
+                    <ChevronRightIcon className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Calendar grid */}
+              <div className="mb-4">
+                <div className="mb-1 grid grid-cols-7 text-center text-xs font-medium text-gray-400">
+                  {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+                    <div key={i} className="flex h-6 items-center justify-center">{d}</div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {calendarRows.flat().map((date, idx) => {
+                    const dateStr = format(date, 'yyyy-MM-dd');
+                    const hasTasks = (tasks[dateStr]?.length ?? 0) > 0;
+                    const isSelected = selectedDate === dateStr;
+                    const isCurrentMonth = isSameMonth(date, monthStart);
+                    const isToday = isSameDay(date, new Date());
+
+                    return (
+                      <button
+                        key={dateStr + idx}
+                        onClick={() => setSelectedDate(dateStr)}
+                        className={`relative flex h-9 items-center justify-center rounded-lg text-sm transition
+                          ${isSelected
+                            ? 'bg-red-600 font-semibold text-white shadow-sm'
+                            : isToday
+                              ? 'bg-red-50 font-semibold text-red-700 hover:bg-red-100'
+                              : isCurrentMonth
+                                ? 'text-gray-700 hover:bg-gray-100'
+                                : 'text-gray-300 hover:bg-gray-50'}`}
+                      >
+                        {date.getDate()}
+                        {hasTasks && (
+                          <span
+                            className={`absolute bottom-1 h-1 w-1 rounded-full ${isSelected ? 'bg-white' : 'bg-red-500'}`}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Selected date tasks */}
+              <div className="border-t border-gray-100 pt-4">
+                <h3 className="mb-3 text-sm font-medium text-gray-800">
+                  {format(parseISO(selectedDate), 'EEEE, MMMM d')}
+                  <span className="ml-2 text-xs font-normal text-gray-400">
+                    {selectedTasks.length} task{selectedTasks.length !== 1 ? 's' : ''}
+                  </span>
+                </h3>
+
+                <form
+                  className="mb-3 flex gap-2"
+                  onSubmit={async e => {
+                    e.preventDefault();
+                    if (!newTask.trim()) return;
+                    try {
+                      const response = await fetch(API_CONFIG.getUrl('/calendar-tasks'), {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: JSON.stringify({ date: selectedDate, title: newTask })
+                      });
+                      if (response.ok) {
+                        fetchTasks();
+                        setNewTask('');
+                      }
+                    } catch (error) {
+                      console.error('Error adding task:', error);
+                    }
+                  }}
+                >
+                  <input
+                    type="text"
+                    className="h-9 flex-1 rounded-lg border border-gray-200 px-3 text-sm placeholder-gray-400 transition focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                    placeholder="Add a task…"
+                    value={newTask}
+                    onChange={e => setNewTask(e.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    className="inline-flex h-9 items-center gap-1 rounded-lg bg-red-600 px-3 text-sm font-medium text-white transition hover:bg-red-700"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Add
+                  </button>
+                </form>
+
+                <div className="max-h-44 space-y-1.5 overflow-y-auto">
+                  {selectedTasks.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-gray-200 py-5 text-center text-sm text-gray-400">
+                      Nothing scheduled for this day.
+                    </div>
+                  ) : (
+                    selectedTasks.map(task => (
+                      <div
+                        key={task.id}
+                        className="group flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 transition hover:bg-gray-100"
+                      >
+                        <span className="text-sm text-gray-700">{task.text}</span>
+                        <button
+                          className="rounded p-1 text-gray-400 opacity-0 transition hover:text-red-600 group-hover:opacity-100 focus:opacity-100"
+                          aria-label="Delete task"
+                          onClick={async () => {
+                            try {
+                              const response = await fetch(API_CONFIG.getUrl(`/calendar-tasks/${task.id}`), {
+                                method: 'DELETE',
+                                headers: {
+                                  'Authorization': `Bearer ${localStorage.getItem('token')}`
+                                }
+                              });
+                              if (response.ok) {
+                                fetchTasks();
+                              }
+                            } catch (error) {
+                              console.error('Error deleting task:', error);
+                            }
+                          }}
+                        >
+                          <Trash2Icon className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default HrDashboardPage;

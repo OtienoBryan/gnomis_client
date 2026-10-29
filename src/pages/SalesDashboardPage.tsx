@@ -320,6 +320,7 @@ const SalesDashboardPage: React.FC = () => {
       label: 'Reports & Analytics',
       items: [
         { to: '/raw-material-usage', label: 'Raw Materials Used', icon: <BarChart3Icon className="h-4 w-4" />, color: 'bg-white text-sky-700 border-gray-300 hover:bg-sky-50' },
+        { to: '/produced-products', label: 'Produced Products', icon: <BarChart3Icon className="h-4 w-4" />, color: 'bg-white text-indigo-700 border-gray-300 hover:bg-indigo-50' },
         //{ to: '/shared-performance', label: 'Sales Rep Performance', icon: <TrendingUpIcon className="h-4 w-4" />, color: 'bg-white text-rose-700 border-gray-300 hover:bg-rose-50' },
         { to: '/overall-attendance', label: 'Sales Rep Attendance Report', icon: <BarChart3Icon className="h-4 w-4" />, color: 'bg-white text-violet-700 border-gray-300 hover:bg-violet-50' },
         //{ to: '/dashboard/reports/product-performance', label: 'Product Perf.', icon: <PieChartIcon className="h-4 w-4" />, color: 'bg-white text-cyan-700 border-gray-300 hover:bg-cyan-50' },

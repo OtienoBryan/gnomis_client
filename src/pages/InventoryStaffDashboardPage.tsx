@@ -94,17 +94,15 @@ const InventoryStaffDashboardPage: React.FC = () => {
         salesResponse,
         storesResponse,
         storeSummaryResponse,
-        stockSummaryResponse,
         categoriesResponse,
         creditNotesResponse,
         topSellingResponse,
         transfersResponse
       ] = await Promise.all([
         storeService.getAllStoresInventory(),
-        axios.get('/api/financial/sales-orders'),
+        axios.get('/api/financial/sales-orders', { params: { include_items: false } }),
         storeService.getAllStores(),
         storeService.getInventorySummaryByStore(),
-        storeService.getStockSummary(),
         categoriesService.getAll(),
         creditNoteService.getAll(),
         axios.get('/api/financial/reports/product-performance').catch(() => ({ data: { success: false, data: [] } })),
@@ -178,8 +176,33 @@ const InventoryStaffDashboardPage: React.FC = () => {
 
       if (storesResponse.success) setStores(storesResponse.data || []);
       if (storeSummaryResponse.success) setStoreSummary(storeSummaryResponse.data || []);
-      if (stockSummaryResponse.success) {
-        const stockSummary = stockSummaryResponse.data || null;
+      if (inventoryResponse.success) {
+        // Build the stock summary from the inventory rows (same data the
+        // /stock-summary endpoint returns) to avoid a second heavy query.
+        const storesMap = new Map<number, any>();
+        const productsMap = new Map<number, any>();
+        (inventoryResponse.data || []).forEach((row: any) => {
+          if (!storesMap.has(row.store_id)) {
+            storesMap.set(row.store_id, { id: row.store_id, store_name: row.store_name, store_code: row.store_code });
+          }
+          let product = productsMap.get(row.product_id);
+          if (!product) {
+            product = {
+              id: row.product_id,
+              product_name: row.product_name,
+              product_code: row.product_code,
+              category: row.category,
+              reorder_level: row.reorder_level || 0,
+              store_quantities: {}
+            };
+            productsMap.set(row.product_id, product);
+          }
+          product.store_quantities[row.store_id] = row.quantity;
+        });
+        const stockSummary: any = {
+          stores: Array.from(storesMap.values()),
+          products: Array.from(productsMap.values())
+        };
         setStockSummaryData(stockSummary);
         
         // Calculate items below reorder level
