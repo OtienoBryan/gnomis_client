@@ -38,7 +38,8 @@ const PaymentCollectionsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('Pending');
+  const [methodFilter, setMethodFilter] = useState('');
   const [staffFilter, setStaffFilter] = useState('');
   const [search, setSearch] = useState('');
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -114,15 +115,21 @@ const PaymentCollectionsPage: React.FC = () => {
     return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [collections]);
 
+  const methodOptions = useMemo(
+    () => Array.from(new Set(collections.map(c => c.payment_method).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [collections]
+  );
+
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return collections.filter(c => {
       if (statusFilter !== 'all' && c.status !== statusFilter) return false;
       if (staffFilter && String(c.user_id) !== staffFilter) return false;
+      if (methodFilter && (c.payment_method || '') !== methodFilter) return false;
       if (!q) return true;
       return [c.staff_name, c.client_name, c.comment, c.payment_method].some(v => (v || '').toLowerCase().includes(q));
     });
-  }, [collections, statusFilter, staffFilter, search]);
+  }, [collections, statusFilter, staffFilter, methodFilter, search]);
 
   const sum = (list: Collection[]) => list.reduce((t, c) => t + (Number(c.amount) || 0), 0);
   const count = (s: string) => collections.filter(c => c.status === s).length;
@@ -226,6 +233,12 @@ const PaymentCollectionsPage: React.FC = () => {
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
+              <select className={`${inputClass} w-40`} value={methodFilter} onChange={e => setMethodFilter(e.target.value)}>
+                <option value="">All methods</option>
+                {methodOptions.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
               <input
                 className={`${inputClass} w-56`}
                 placeholder="Search staff, client or comment..."
@@ -266,7 +279,7 @@ const PaymentCollectionsPage: React.FC = () => {
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-700">{c.client_name || `Client ${c.client_id}`}</td>
                       <td className="px-4 py-2.5 text-right text-xs font-semibold text-gray-900">{money(Number(c.amount) || 0)}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap text-xs text-gray-700">{c.payment_method}</td>
-                      <td className="px-4 py-2.5 text-xs text-gray-600 max-w-[220px] truncate" title={c.comment || ''}>{c.comment || '—'}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-600 min-w-[220px] max-w-[360px] whitespace-normal break-words">{c.comment || '—'}</td>
                       <td className="px-4 py-2.5 whitespace-nowrap">
                         {c.receipt_image_url ? (
                           <button

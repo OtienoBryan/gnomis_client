@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { PiggyBank, AlertCircle, Search, ChevronRight, Wallet, Plus } from 'lucide-react';
+import { PiggyBank, AlertCircle, Search, ChevronRight, Wallet, Plus, Download, FileText } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { api } from '../services/api';
 
 interface RepBalance {
   id: number;
   name: string;
   status?: string;
+  role?: string | null;
   balance: number | string;
 }
 
@@ -39,6 +42,7 @@ const PettyCashBalancesPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('balance_desc');
+  const [roleFilter, setRoleFilter] = useState('all');
 
   useEffect(() => {
     api
@@ -49,6 +53,12 @@ const PettyCashBalancesPage: React.FC = () => {
   }, []);
 
   const stats = useMemo(() => ({ total: reps.reduce((s, r) => s + Number(r.balance || 0), 0) }), [reps]);
+
+  const roles = useMemo(
+    () => Array.from(new Set(reps.map(r => (r.role || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [reps]
+  );
+  const hasUnassigned = useMemo(() => reps.some(r => !(r.role || '').trim()), [reps]);
 
   const counts = useMemo(
     () => ({
@@ -62,6 +72,10 @@ const PettyCashBalancesPage: React.FC = () => {
   const visible = useMemo(() => {
     const list = reps
       .filter(r => r.name?.toLowerCase().includes(search.toLowerCase()))
+      .filter(r => {
+        const role = (r.role || '').trim();
+        return roleFilter === 'all' ? true : roleFilter === '__none__' ? !role : role === roleFilter;
+      })
       .filter(r => (filter === 'with' ? Number(r.balance) !== 0 : filter === 'zero' ? Number(r.balance) === 0 : true));
     const byBalance = (a: RepBalance, b: RepBalance) => Number(b.balance || 0) - Number(a.balance || 0);
     return [...list].sort((a, b) => {
@@ -69,9 +83,46 @@ const PettyCashBalancesPage: React.FC = () => {
       if (sort === 'balance_asc') return -byBalance(a, b);
       return (a.name || '').localeCompare(b.name || '');
     });
-  }, [reps, search, filter, sort]);
+  }, [reps, search, filter, sort, roleFilter]);
 
   const visibleTotal = useMemo(() => visible.reduce((s, r) => s + Number(r.balance || 0), 0), [visible]);
+
+  const exportRows = () => visible.map(r => [r.name || '', r.role || '', Number(r.balance || 0).toFixed(2)]);
+  const stamp = () => new Date().toISOString().slice(0, 10);
+
+  const exportCSV = () => {
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const lines = [['Staff', 'Role', 'Balance (KES)'].map(esc).join(',')];
+    exportRows().forEach(r => lines.push([esc(r[0]), esc(r[1]), r[2]].join(',')));
+    lines.push(['Total', '', visibleTotal.toFixed(2)].map((v, i) => (i === 2 ? v : esc(v))).join(','));
+    const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `petty-cash-balances-${stamp()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text('Staff Petty Cash Balances', 14, 16);
+    doc.setFontSize(9);
+    const roleLabel = roleFilter === 'all' ? 'All roles' : roleFilter === '__none__' ? 'No role' : roleFilter;
+    doc.text(`Generated ${new Date().toLocaleString()}  |  Role: ${roleLabel}`, 14, 22);
+    autoTable(doc, {
+      startY: 27,
+      head: [['Staff', 'Role', 'Balance (KES)']],
+      body: visible.map(r => [r.name || '', r.role || '-', formatKES(r.balance).replace('KES', '').trim()]),
+      foot: [['Total', '', formatKES(visibleTotal).replace('KES', '').trim()]],
+      headStyles: { fillColor: [220, 38, 38] },
+      footStyles: { fillColor: [243, 244, 246], textColor: 20 },
+      columnStyles: { 2: { halign: 'right' } },
+      styles: { fontSize: 9 },
+    });
+    doc.save(`petty-cash-balances-${stamp()}.pdf`);
+  };
 
   const tabs: { key: Filter; label: string }[] = [
     { key: 'all', label: 'All' },
@@ -92,6 +143,21 @@ const PettyCashBalancesPage: React.FC = () => {
             <p className="text-xs text-gray-500">Current petty cash held by each staff member</p>
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={exportCSV}
+          disabled={loading || visible.length === 0}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" /> CSV
+        </button>
+        <button
+          onClick={exportPDF}
+          disabled={loading || visible.length === 0}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          <FileText className="h-4 w-4" /> PDF
+        </button>
         <Link
           to="/petty-cash"
           className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 shadow-sm"
@@ -99,6 +165,7 @@ const PettyCashBalancesPage: React.FC = () => {
           <Plus className="h-4 w-4" />
           Allocate Petty Cash
         </Link>
+        </div>
       </div>
 
       {error && (
@@ -119,6 +186,29 @@ const PettyCashBalancesPage: React.FC = () => {
 
       {/* Toolbar */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
+        {roles.length > 0 && (
+          <div className="flex gap-1 overflow-x-auto px-3 pt-2 border-b border-gray-200">
+            {[
+              { key: 'all', label: 'All', count: reps.length },
+              ...roles.map(r => ({ key: r, label: r, count: reps.filter(x => (x.role || '').trim() === r).length })),
+              ...(hasUnassigned
+                ? [{ key: '__none__', label: 'No role', count: reps.filter(x => !(x.role || '').trim()).length }]
+                : []),
+            ].map(t => (
+              <button
+                key={t.key}
+                onClick={() => setRoleFilter(t.key)}
+                className={`whitespace-nowrap px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  roleFilter === t.key
+                    ? 'border-red-600 text-red-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                {t.label} <span className="text-gray-400 text-xs">({t.count})</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="p-3 flex flex-col lg:flex-row lg:items-center gap-3 border-b border-gray-200">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -160,6 +250,7 @@ const PettyCashBalancesPage: React.FC = () => {
             <thead>
               <tr className="bg-gray-50 text-left">
                 <th className="px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Staff</th>
+                <th className="px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Role</th>
                 <th className="px-4 py-2.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">Balance</th>
                 <th className="px-4 py-2.5 w-8" />
               </tr>
@@ -167,13 +258,13 @@ const PettyCashBalancesPage: React.FC = () => {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-10 text-center">
+                  <td colSpan={4} className="px-4 py-10 text-center">
                     <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-red-600 mx-auto" />
                   </td>
                 </tr>
               ) : visible.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-10 text-center text-sm text-gray-500">
+                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-gray-500">
                     No staff match your filters
                   </td>
                 </tr>
@@ -189,6 +280,7 @@ const PettyCashBalancesPage: React.FC = () => {
                       <td className="px-4 py-3">
                         <span className="text-sm font-medium text-gray-900 group-hover:text-red-700">{r.name}</span>
                       </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{r.role || '—'}</td>
                       <td className={`px-4 py-3 text-right text-sm font-bold whitespace-nowrap ${bal > 0 ? 'text-red-600' : 'text-gray-400'}`}>
                         {formatKES(bal)}
                       </td>
@@ -203,7 +295,7 @@ const PettyCashBalancesPage: React.FC = () => {
             {!loading && visible.length > 0 && (
               <tfoot>
                 <tr className="bg-gray-50 border-t border-gray-200">
-                  <td className="px-4 py-3 text-xs text-gray-500">
+                  <td colSpan={2} className="px-4 py-3 text-xs text-gray-500">
                     Showing {visible.length} of {reps.length} staff
                   </td>
                   <td className="px-4 py-3 text-right text-sm font-bold text-gray-900">{formatKES(visibleTotal)}</td>

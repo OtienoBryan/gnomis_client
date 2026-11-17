@@ -244,6 +244,8 @@ const ProductsPage: React.FC = () => {
       }
       // sku_id is handled via separate endpoint
       delete (updateData as any).sku_id;
+      // Price per pack is not editable here; leave the stored value untouched
+      delete updateData.price_per_pack;
 
       const res = await axios.put(`/api/financial/products/${editProduct.id}`, updateData);
       if (!res.data.success) {
@@ -514,14 +516,14 @@ const ProductsPage: React.FC = () => {
                           <div className="flex items-center justify-between mb-2">
                             {canSeeCost && (
                               <div>
-                                <span className="text-[10px] text-gray-400">Cost: </span>
+                                <span className="text-[10px] text-gray-400">Production Cost: </span>
                                 <span className="text-xs font-semibold text-red-600">
                                   {Number(product.cost_price).toLocaleString(undefined, { style: 'currency', currency: 'KES' })}
                                 </span>
                               </div>
                             )}
                             <div>
-                              <span className="text-[10px] text-gray-400">RRP: </span>
+                              <span className="text-[10px] text-gray-400">Selling Price: </span>
                               <span className="text-xs font-semibold text-green-600">
                                 {Number(product.selling_price || 0).toLocaleString(undefined, { style: 'currency', currency: 'KES' })}
                               </span>
@@ -592,13 +594,12 @@ const ProductsPage: React.FC = () => {
                             <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Code</th>
                             <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">SKU</th>
                             <th className="px-4 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                            <th className="px-4 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">Outer Qty</th>
-                            <th className="px-4 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">Price per Pack</th>
+                            <th className="px-4 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">Bale Qty</th>
                             <th className="px-4 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">Target Stock Qty</th>
                             {canSeeCost && (
-                              <th className="px-4 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">Cost Price</th>
+                              <th className="px-4 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">Production Cost</th>
                             )}
-                            <th className="px-4 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">RRP</th>
+                            <th className="px-4 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">Selling Price</th>
                             <th className="px-4 py-2 text-right text-[10px] font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                           </tr>
                         </thead>
@@ -626,11 +627,6 @@ const ProductsPage: React.FC = () => {
                           <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">{product.sku || '-'}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-500">{product.category}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-right text-xs text-gray-500">{product.outer_qty ?? '-'}</td>
-                          <td className="px-4 py-3 whitespace-nowrap text-right text-xs text-gray-500">
-                            {product.price_per_pack != null
-                              ? Number(product.price_per_pack).toLocaleString(undefined, { style: 'currency', currency: 'KES' })
-                              : '-'}
-                          </td>
                           <td className="px-4 py-3 whitespace-nowrap text-right text-xs text-gray-500">{product.target_stock_qty ?? '-'}</td>
                           {canSeeCost && (
                             <td className="px-4 py-3 whitespace-nowrap text-right text-xs font-semibold text-red-600">
@@ -890,14 +886,14 @@ const ProductsPage: React.FC = () => {
                   <div className={`grid gap-3 ${canSeeCost ? 'grid-cols-2' : 'grid-cols-1'}`}>
                     {canSeeCost && (
                       <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">Cost Price</label>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Production Cost</label>
                         <input
                           type="number"
                           name="cost_price"
                           value={editForm.cost_price ?? ''}
                           onChange={handleEditChange}
                           disabled={!!editProduct?.has_recipe}
-                          title={editProduct?.has_recipe ? 'Cost is calculated from the recipe' : undefined}
+                          title={editProduct?.has_recipe ? 'Production cost is calculated from the recipe' : undefined}
                           className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 disabled:bg-gray-100 disabled:text-gray-500"
                           min="0"
                           step="0.01"
@@ -906,7 +902,7 @@ const ProductsPage: React.FC = () => {
                       </div>
                     )}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">RRP</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Selling Price</label>
                       <input
                         type="number"
                         name="selling_price"
@@ -920,31 +916,17 @@ const ProductsPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Outer Qty</label>
-                      <input
-                        type="number"
-                        name="outer_qty"
-                        value={editForm.outer_qty ?? ''}
-                        onChange={handleEditChange}
-                        className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                        min="0"
-                        step="1"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Price per Pack</label>
-                      <input
-                        type="number"
-                        name="price_per_pack"
-                        value={editForm.price_per_pack ?? ''}
-                        onChange={handleEditChange}
-                        className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                        min="0"
-                        step="0.01"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Bale Qty</label>
+                    <input
+                      type="number"
+                      name="outer_qty"
+                      value={editForm.outer_qty ?? ''}
+                      onChange={handleEditChange}
+                      className="w-full border border-gray-300 rounded-md px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                      min="0"
+                      step="1"
+                    />
                   </div>
 
                   <div>
@@ -1090,9 +1072,6 @@ const ProductsPage: React.FC = () => {
                     if (addForm.outer_qty) {
                       formData.append('outer_qty', addForm.outer_qty);
                     }
-                    if (addForm.price_per_pack) {
-                      formData.append('price_per_pack', addForm.price_per_pack);
-                    }
                     if (addForm.target_stock_qty) {
                       formData.append('target_stock_qty', addForm.target_stock_qty);
                     }
@@ -1176,7 +1155,7 @@ const ProductsPage: React.FC = () => {
                 </div>
                 {canSeeCost && (
                   <div className="mb-2.5">
-                    <label className="block text-xs font-medium mb-1">Cost Price</label>
+                    <label className="block text-xs font-medium mb-1">Production Cost</label>
                     <input
                       className="border rounded px-2.5 py-1.5 text-xs w-full"
                       type="number"
@@ -1187,7 +1166,7 @@ const ProductsPage: React.FC = () => {
                   </div>
                 )}
                 <div className="mb-2.5">
-                  <label className="block text-xs font-medium mb-1">RRP</label>
+                  <label className="block text-xs font-medium mb-1">Selling Price</label>
                   <input
                     className="border rounded px-2.5 py-1.5 text-xs w-full"
                     type="number"
@@ -1199,7 +1178,7 @@ const ProductsPage: React.FC = () => {
                   />
                 </div>
                 <div className="mb-2.5">
-                  <label className="block text-xs font-medium mb-1">Outer Qty</label>
+                  <label className="block text-xs font-medium mb-1">Bale Qty</label>
                   <input
                     className="border rounded px-2.5 py-1.5 text-xs w-full"
                     type="number"
@@ -1207,17 +1186,6 @@ const ProductsPage: React.FC = () => {
                     onChange={e => setAddForm(f => ({ ...f, outer_qty: e.target.value }))}
                     min="0"
                     step="1"
-                  />
-                </div>
-                <div className="mb-2.5">
-                  <label className="block text-xs font-medium mb-1">Price per Pack</label>
-                  <input
-                    className="border rounded px-2.5 py-1.5 text-xs w-full"
-                    type="number"
-                    value={addForm.price_per_pack}
-                    onChange={e => setAddForm(f => ({ ...f, price_per_pack: e.target.value }))}
-                    min="0"
-                    step="0.01"
                   />
                 </div>
                 <div className="mb-2.5">

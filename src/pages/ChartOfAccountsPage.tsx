@@ -30,8 +30,16 @@ const ChartOfAccountsPage: React.FC = () => {
   const [editingAccount, setEditingAccount] = useState<ChartOfAccount | null>(null);
   const [editForm, setEditForm] = useState({ account_name: '', account_type: 1, description: '' });
   const [saving, setSaving] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({ account_code: '', account_name: '', account_type: 1, parent_account_id: '', description: '' });
+  const [addError, setAddError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
 
   useEffect(() => {
+    chartOfAccountsService.getCategories()
+      .then(res => { if (res.success && res.data) setCategories(res.data); })
+      .catch(err => console.error('Error fetching account categories:', err));
     fetchAccountTypes();
     fetchAccounts();
   }, []);
@@ -143,6 +151,47 @@ const ChartOfAccountsPage: React.FC = () => {
     }
   };
 
+  const openAdd = () => {
+    setAddForm({ account_code: '', account_name: '', account_type: filterType === 'all' ? 1 : filterType, parent_account_id: '', description: '' });
+    setAddError(null);
+    setShowAdd(true);
+  };
+
+  const handleAdd = async () => {
+    const code = addForm.account_code.trim();
+    const name = addForm.account_name.trim();
+    if (!code || !name) {
+      setAddError('Account code and name are required');
+      return;
+    }
+    if (accounts.some(a => a.account_code.toLowerCase() === code.toLowerCase())) {
+      setAddError(`Account code ${code} already exists`);
+      return;
+    }
+
+    setAdding(true);
+    setAddError(null);
+    try {
+      const response = await chartOfAccountsService.create({
+        account_code: code,
+        account_name: name,
+        account_type: addForm.account_type,
+        parent_account_id: addForm.parent_account_id ? Number(addForm.parent_account_id) : null,
+        description: addForm.description.trim() || null
+      } as any);
+      if (response.success) {
+        setShowAdd(false);
+        await fetchAccounts();
+      } else {
+        setAddError(response.error || 'Failed to create account');
+      }
+    } catch (err: any) {
+      setAddError(err.response?.data?.error || err.message || 'Failed to create account');
+    } finally {
+      setAdding(false);
+    }
+  };
+
   const exportToCSV = () => {
     if (!filteredAccounts.length) return;
 
@@ -246,6 +295,13 @@ const ChartOfAccountsPage: React.FC = () => {
               </div>
             </div>
             <div className="flex space-x-2">
+              <button
+                onClick={openAdd}
+                className="inline-flex items-center px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                <Plus className="w-3 h-3 mr-1.5" />
+                Add Account
+              </button>
               <button
                 onClick={exportToCSV}
                 disabled={!filteredAccounts.length}
@@ -444,6 +500,105 @@ const ChartOfAccountsPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Add Account Modal */}
+      {showAdd && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h2 className="text-sm font-semibold text-gray-900">Add Account</h2>
+              <button onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-gray-600" disabled={adding}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              {addError && (
+                <div className="p-2 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-xs text-red-600">{addError}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Code <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={addForm.account_code}
+                    onChange={(e) => setAddForm({ ...addForm, account_code: e.target.value })}
+                    className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                    disabled={adding}
+                    placeholder="e.g. 2100"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Account Name <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={addForm.account_name}
+                    onChange={(e) => setAddForm({ ...addForm, account_name: e.target.value })}
+                    className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                    disabled={adding}
+                    placeholder="e.g. PAYE Payable"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">Account Type <span className="text-red-500">*</span></label>
+                <select
+                  value={addForm.account_type}
+                  onChange={(e) => setAddForm({ ...addForm, account_type: parseInt(e.target.value) })}
+                  className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                  disabled={adding}
+                >
+                  {Object.entries(accountTypes).map(([typeNum, typeInfo]) => (
+                    <option key={typeNum} value={typeNum}>{typeInfo.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">Parent Account (category)</label>
+                <select
+                  value={addForm.parent_account_id}
+                  onChange={(e) => setAddForm({ ...addForm, parent_account_id: e.target.value })}
+                  className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                  disabled={adding}
+                >
+                  <option value="">None</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">Description</label>
+                <textarea
+                  value={addForm.description}
+                  onChange={(e) => setAddForm({ ...addForm, description: e.target.value })}
+                  className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                  rows={2}
+                  disabled={adding}
+                  placeholder="Optional"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  onClick={() => setShowAdd(false)}
+                  disabled={adding}
+                  className="px-3 py-1.5 text-xs text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAdd}
+                  disabled={adding || !addForm.account_code.trim() || !addForm.account_name.trim()}
+                  className="inline-flex items-center px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {adding ? 'Creating...' : (<><Plus className="w-3 h-3 mr-1.5" />Create Account</>)}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Account Modal */}
       {editingAccount && (

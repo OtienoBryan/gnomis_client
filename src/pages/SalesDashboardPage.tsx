@@ -10,6 +10,7 @@ import {
   BarChart3Icon, CalendarIcon, MapPinIcon, FileTextIcon,
   X, ChevronRightIcon, ClipboardListIcon, ActivityIcon,
   CheckCircle2Icon, AlertCircleIcon, ArrowUpRightIcon, PiggyBankIcon,
+  WalletIcon, SlidersIcon,
 } from 'lucide-react';
 
 /* ──────────────────────────── StatCard ──────────────────────────── */
@@ -292,6 +293,17 @@ const SalesDashboardPage: React.FC = () => {
         { to: '/sales-rep-leaves', label: 'Sales Rep Leaves', icon: <CalendarIcon className="h-4 w-4" />, color: 'bg-white text-green-700 border-gray-300 hover:bg-green-50', badge: pendingLeavesCount },
         { to: '/sales-rep-working-days', label: 'Working Days', icon: <ClipboardListIcon className="h-4 w-4" />, color: 'bg-white text-sky-700 border-gray-300 hover:bg-sky-50' },
         { to: '/sales-rep-attendance', label: 'Sales Rep Attendance', icon: <BarChart3Icon className="h-4 w-4" />, color: 'bg-white text-teal-700 border-gray-300 hover:bg-teal-50' },
+      ],
+    },
+    {
+      label: 'Payroll',
+      items: [
+        { to: '/payroll-management', label: 'Payroll Overview', icon: <WalletIcon className="h-4 w-4" />, color: 'bg-white text-red-700 border-gray-300 hover:bg-red-50' },
+        { to: '/payroll-runs', label: 'Payroll Runs', icon: <CalendarIcon className="h-4 w-4" />, color: 'bg-white text-green-700 border-gray-300 hover:bg-green-50' },
+        { to: '/payroll-staff', label: 'Staff Payroll Setup', icon: <UsersIcon className="h-4 w-4" />, color: 'bg-white text-sky-700 border-gray-300 hover:bg-sky-50' },
+        { to: '/payroll-statutory', label: 'Statutory Deductions', icon: <SlidersIcon className="h-4 w-4" />, color: 'bg-white text-violet-700 border-gray-300 hover:bg-violet-50' },
+        { to: '/payroll-accounts', label: 'Payroll Account Links', icon: <FileTextIcon className="h-4 w-4" />, color: 'bg-white text-amber-700 border-gray-300 hover:bg-amber-50' },
+        { to: '/sales-rep-payroll', label: 'Sales Rep Payroll', icon: <WalletIcon className="h-4 w-4" />, color: 'bg-white text-teal-700 border-gray-300 hover:bg-teal-50' },
       ],
     },
     {

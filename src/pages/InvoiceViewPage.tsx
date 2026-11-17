@@ -44,6 +44,20 @@ const numberToWords = (num: number): string => {
   return chunks.join(' ');
 };
 
+// Splits the order quantity into full bales (product's bale qty) plus loose pieces,
+// e.g. 125 with 24 per bale -> "5 bales, 5 pcs". Blank when the product has no bale qty.
+const formatBales = (qty: number | string, perBale?: number | string | null): string => {
+  const per = Number(perBale);
+  const q = Number(qty);
+  if (!per || per <= 0 || !isFinite(q)) return '-';
+  const bales = Math.floor(q / per + 1e-9);
+  const pieces = Math.round((q - bales * per) * 100) / 100;
+  const parts: string[] = [];
+  if (bales > 0) parts.push(`${bales} ${bales === 1 ? 'bale' : 'bales'}`);
+  if (pieces > 0) parts.push(`${pieces} ${pieces === 1 ? 'pc' : 'pcs'}`);
+  return parts.length ? parts.join(', ') : '0';
+};
+
 const InvoiceViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -236,6 +250,7 @@ const InvoiceViewPage: React.FC = () => {
                   <tr>
                     <th className="desc-col">DESCRIPTION</th>
                     <th className="qty-col">QUANTITY</th>
+                    <th className="bale-col">BALES</th>
                     <th className="price-col">UNIT PRICE</th>
                     <th className="tax-col">VAT</th>
                     <th className="amount-col">AMOUNT</th>
@@ -248,6 +263,7 @@ const InvoiceViewPage: React.FC = () => {
                       <tr key={index}>
                         <td className="desc-col">{description}</td>
                         <td className="qty-col">{Number(item.quantity).toFixed(2)}</td>
+                        <td className="bale-col">{formatBales(item.quantity, item.outer_qty)}</td>
                         {/* VAT-inclusive unit price (LPO price) so quantity x price = amount */}
                         <td className="price-col">
                           {formatCurrency(Number(item.quantity) ? Number(item.total_price) / Number(item.quantity) : 0)}
@@ -393,10 +409,12 @@ const InvoiceViewPage: React.FC = () => {
           font-size: 9px;
         }
 
-        .desc-col { width: 38%; }
+        .desc-col { width: 26%; }
+        .bale-col { width: 14%; text-align: right; }
+        .invoice-table th.bale-col { text-align: right; }
         .qty-col { width: 12%; text-align: right; }
         .price-col { width: 15%; text-align: right; }
-        .tax-col { width: 20%; text-align: right; }
+        .tax-col { width: 18%; text-align: right; }
         .amount-col { width: 15%; text-align: right; }
 
         .totals-section {

@@ -111,12 +111,18 @@ const FinancialDashboardPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (!localStorage.getItem('token')) {
+      navigate('/login', { replace: true });
+      return;
+    }
     setLoading(true);
     setError(null);
     dashboardService.getStats()
       .then(res => {
         if (res.success && res.data) {
           setStats(res.data);
+        } else if (/unauthor|token|401|forbidden/i.test(String(res.error || ''))) {
+          navigate('/login', { replace: true });
         } else {
           setError(res.error || 'Failed to load dashboard stats');
         }

@@ -39,8 +39,19 @@ export const fetchWithAuth = async (
     headers
   });
   
+  // The server answers 403 (not 401) for a malformed/invalid token; treat that like an expired session
+  let invalidToken = false;
+  if (response.status === 403) {
+    try {
+      const body = await response.clone().json();
+      invalidToken = /invalid token|token verification failed/i.test(String(body?.error || ''));
+    } catch {
+      invalidToken = false;
+    }
+  }
+
   // Handle authentication errors
-  if (response.status === 401) {
+  if (response.status === 401 || invalidToken) {
     // Token expired or invalid
     console.warn('Authentication failed - redirecting to login');
     localStorage.removeItem('token');

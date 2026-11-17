@@ -175,6 +175,7 @@ export interface User {
     sales_order_id: number;
     product_id: number;
     product_name?: string;
+    outer_qty?: number | null; // units per bale (from the product)
     quantity: number;
     unit_price: number;
     total_price: number;

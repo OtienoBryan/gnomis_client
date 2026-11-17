@@ -33,6 +33,22 @@ axios.interceptors.request.use(
   }
 );
 
+// Redirect to login when the token is missing, expired or invalid
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const msg = String(error?.response?.data?.error || '');
+    const invalidToken = status === 403 && /invalid token|token verification failed/i.test(msg);
+    if ((status === 401 || invalidToken) && window.location.pathname !== '/login') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Chart of Accounts Service
 export const chartOfAccountsService = {
   getAll: async (): Promise<ApiResponse<ChartOfAccount[]>> => {
@@ -42,6 +58,11 @@ export const chartOfAccountsService = {
 
   getAccountTypes: async (): Promise<ApiResponse<Array<{ id: number; name: string; color: string }>>> => {
     const response = await axios.get(`${API_BASE_URL}/financial/accounts/types`);
+    return response.data;
+  },
+
+  getCategories: async (): Promise<ApiResponse<Array<{ id: number; name: string }>>> => {
+    const response = await axios.get(`${API_BASE_URL}/financial/accounts/categories`);
     return response.data;
   },
 

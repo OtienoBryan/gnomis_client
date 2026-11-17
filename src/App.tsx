@@ -63,6 +63,11 @@ import JournalEntriesPage from './pages/JournalEntriesPage';
 import PayrollManagementPage from './pages/PayrollManagementPage';
 import PayrollDeductionsPage from './pages/PayrollDeductionsPage';
 import SalesRepPayrollPage from './pages/SalesRepPayrollPage';
+import PayrollStatutoryPage from './pages/PayrollStatutoryPage';
+import PayrollStaffPage from './pages/PayrollStaffPage';
+import PayrollRunsPage from './pages/PayrollRunsPage';
+import PayrollAccountsPage from './pages/PayrollAccountsPage';
+import PayrollRunDetailPage from './pages/PayrollRunDetailPage';
 import GeneralLedgerReportPage from './pages/GeneralLedgerReportPage';
 import ChartOfAccountsPage from './pages/ChartOfAccountsPage';
 import CollectionReportPage from './pages/CollectionReportPage';
@@ -716,6 +721,31 @@ const App = () => {
             <Route path="/sales-rep-payroll" element={
               <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance']} fallbackPath="/sales-dashboard">
                 <SalesRepPayrollPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/payroll-statutory" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance', 'hr']} fallbackPath="/sales-dashboard">
+                <PayrollStatutoryPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/payroll-accounts" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance', 'hr']} fallbackPath="/sales-dashboard">
+                <PayrollAccountsPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/payroll-staff" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance', 'hr']} fallbackPath="/sales-dashboard">
+                <PayrollStaffPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/payroll-runs" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance', 'hr']} fallbackPath="/sales-dashboard">
+                <PayrollRunsPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/payroll-runs/:id" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance', 'hr']} fallbackPath="/sales-dashboard">
+                <PayrollRunDetailPage />
               </RoleBasedRoute>
             } />
             <Route path="/inventory-transactions" element={

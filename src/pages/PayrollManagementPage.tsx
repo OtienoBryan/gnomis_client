@@ -318,12 +318,30 @@ const PayrollManagementPage: React.FC = () => {
           <p className="text-xs text-gray-600">Manage staff salaries, run payroll, and review history</p>
         </div>
         <div className="flex gap-2">
-        <button
-            className="bg-green-600 text-white px-3 py-1.5 text-xs rounded-lg hover:bg-green-700"
-          onClick={() => setShowRunPayroll(true)}
-        >
-          Run Payroll
-        </button>
+          <Link
+            to="/payroll-runs"
+            className="inline-flex items-center bg-green-600 text-white px-3 py-1.5 text-xs rounded-lg hover:bg-green-700"
+          >
+            Payroll Runs
+          </Link>
+          <Link
+            to="/payroll-statutory"
+            className="inline-flex items-center gap-1.5 bg-white border border-gray-200 text-gray-700 px-3 py-1.5 text-xs rounded-lg hover:bg-gray-50"
+          >
+            Statutory Deductions
+          </Link>
+          <Link
+            to="/payroll-staff"
+            className="inline-flex items-center gap-1.5 bg-white border border-gray-200 text-gray-700 px-3 py-1.5 text-xs rounded-lg hover:bg-gray-50"
+          >
+            Staff Payroll Setup
+          </Link>
+          <Link
+            to="/payroll-accounts"
+            className="inline-flex items-center gap-1.5 bg-white border border-gray-200 text-gray-700 px-3 py-1.5 text-xs rounded-lg hover:bg-gray-50"
+          >
+            Account Links
+          </Link>
         <button
             className="bg-white border border-gray-200 text-gray-700 px-3 py-1.5 text-xs rounded-lg hover:bg-gray-50"
           onClick={() => { setShowAllHistory(true); fetchAllHistory(); }}
@@ -335,7 +353,7 @@ const PayrollManagementPage: React.FC = () => {
             className="inline-flex items-center gap-1.5 bg-white border border-gray-200 text-gray-700 px-3 py-1.5 text-xs rounded-lg hover:bg-gray-50"
           >
             <SlidersIcon className="h-3.5 w-3.5" />
-            Manage Deductions
+            Other Deductions
           </Link>
           <Link
             to="/sales-rep-payroll"

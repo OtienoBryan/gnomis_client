@@ -103,6 +103,7 @@ const CustomerOrdersPage: React.FC = () => {
       quantity: number;
       original_quantity: number;
       unit_cost: number;
+      selected: boolean;
     }>
   });
   const [stores, setStores] = useState<Array<{ id: number; store_name: string; store_code: string }>>([]);
@@ -1088,10 +1089,6 @@ const CustomerOrdersPage: React.FC = () => {
 
   // Receive to Stock functions
   const openReceiveToStockModal = (order: SalesOrder) => {
-    if (user?.role !== 'stock') {
-      setError('Only users with stock role can receive products to stock');
-      return;
-    }
     
     if (order.my_status !== 5) { // 5 = Cancelled only
       setError('Only cancelled orders can have products returned to stock');
@@ -1110,7 +1107,8 @@ const CustomerOrdersPage: React.FC = () => {
           product_name: item.product?.product_name || `Product ${item.product_id}`,
           quantity: item.quantity,
           original_quantity: item.quantity,
-          unit_cost: product?.cost_price || 0 // Use product cost price if available
+          unit_cost: product?.cost_price || 0, // Use product cost price if available
+          selected: true
         };
       }) || []
     });
@@ -1161,13 +1159,19 @@ const CustomerOrdersPage: React.FC = () => {
       return;
     }
 
-    if (receiveForm.items.some(item => item.quantity <= 0)) {
-      setReceiveError('All quantities must be greater than 0');
+    const selectedItems = receiveForm.items.filter(item => item.selected);
+    if (selectedItems.length === 0) {
+      setReceiveError('Select at least one item to receive back to stock');
+      return;
+    }
+
+    if (selectedItems.some(item => item.quantity <= 0)) {
+      setReceiveError('All selected quantities must be greater than 0');
       return;
     }
 
     // Check that quantities don't exceed original quantities
-    const invalidQuantities = receiveForm.items.filter(item => item.quantity > item.original_quantity);
+    const invalidQuantities = selectedItems.filter(item => item.quantity > item.original_quantity);
     if (invalidQuantities.length > 0) {
       setReceiveError(`Quantities cannot exceed original order quantities: ${invalidQuantities.map(item => item.product_name).join(', ')}`);
       return;
@@ -1182,7 +1186,7 @@ const CustomerOrdersPage: React.FC = () => {
         order_id: receivingOrder.id,
         store_id: receiveForm.store_id,
         notes: receiveForm.notes,
-        items: receiveForm.items.map(item => ({
+        items: selectedItems.map(item => ({
           product_id: item.product_id,
           quantity: item.quantity,
           unit_cost: item.unit_cost,
@@ -1860,6 +1864,17 @@ const CustomerOrdersPage: React.FC = () => {
                             >
                               Delivery Note
                             </button>
+                            {order.my_status === 5 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openReceiveToStockModal(order);
+                                }}
+                                className="px-2 py-1 text-[10px] font-medium rounded-md bg-orange-50 border border-orange-300 text-orange-700 hover:bg-orange-100"
+                              >
+                                Receive to Stock
+                              </button>
+                            )}
                             {order.my_status === 4 && (
                               <button
                                 onClick={(e) => {
@@ -2565,7 +2580,7 @@ const CustomerOrdersPage: React.FC = () => {
                         {selectedOrder.driver_name ? 'Reassign Driver' : 'Assign Driver'}
                       </button>
                     )}
-                    {selectedOrder.my_status === 5 && (user?.role === 'stock' || user?.role === 'admin') && (
+                    {selectedOrder.my_status === 5 && (
                       <button
                         type="button"
                         onClick={() => openReceiveToStockModal(selectedOrder)}
@@ -2965,13 +2980,13 @@ const CustomerOrdersPage: React.FC = () => {
                       <div>
                         <span className="text-orange-600">Total Items:</span>
                         <span className="ml-2 font-medium text-orange-800">
-                          {receiveForm.items.reduce((sum, item) => sum + item.quantity, 0)} / {receiveForm.items.reduce((sum, item) => sum + item.original_quantity, 0)}
+                          {receiveForm.items.filter(i => i.selected).reduce((sum, item) => sum + item.quantity, 0)} / {receiveForm.items.filter(i => i.selected).reduce((sum, item) => sum + item.original_quantity, 0)}
                         </span>
                       </div>
                       <div>
                         <span className="text-orange-600">Total Value:</span>
                         <span className="ml-2 font-medium text-orange-800">
-                          {formatCurrency(receiveForm.items.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0))}
+                          {formatCurrency(receiveForm.items.filter(i => i.selected).reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0))}
                         </span>
                       </div>
                       <div>
@@ -3054,6 +3069,14 @@ const CustomerOrdersPage: React.FC = () => {
                             <table className="min-w-full divide-y divide-gray-200">
                               <thead className="bg-gray-50">
                                 <tr>
+                                  <th className="px-4 py-3 text-left">
+                                    <input
+                                      type="checkbox"
+                                      checked={receiveForm.items.length > 0 && receiveForm.items.every(i => i.selected)}
+                                      onChange={(e) => setReceiveForm(prev => ({ ...prev, items: prev.items.map(i => ({ ...i, selected: e.target.checked })) }))}
+                                      title="Select all"
+                                    />
+                                  </th>
                                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
                                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Original Qty</th>
                                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Return Qty</th>
@@ -3064,7 +3087,14 @@ const CustomerOrdersPage: React.FC = () => {
                               </thead>
                               <tbody className="bg-white divide-y divide-gray-200">
                                 {receiveForm.items.map((item, index) => (
-                                  <tr key={index}>
+                                  <tr key={index} className={item.selected ? '' : 'opacity-50'}>
+                                    <td className="px-4 py-2">
+                                      <input
+                                        type="checkbox"
+                                        checked={item.selected}
+                                        onChange={(e) => handleReceiveItemChange(index, 'selected', e.target.checked)}
+                                      />
+                                    </td>
                                     <td className="px-4 py-2">
                                       <div className="text-sm font-medium text-gray-900">
                                         {item.product_name}
@@ -3085,6 +3115,7 @@ const CustomerOrdersPage: React.FC = () => {
                                         max={item.original_quantity}
                                         value={item.quantity}
                                         onChange={(e) => handleReceiveItemChange(index, 'quantity', parseInt(e.target.value) || 0)}
+                                        disabled={!item.selected}
                                         className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
                                       />
                                     </td>
@@ -3101,6 +3132,7 @@ const CustomerOrdersPage: React.FC = () => {
                                         step="0.01"
                                         value={item.unit_cost}
                                         onChange={(e) => handleReceiveItemChange(index, 'unit_cost', parseFloat(e.target.value) || 0)}
+                                        disabled={!item.selected}
                                         className="w-24 px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
                                         placeholder="0.00"
                                       />
@@ -3116,10 +3148,10 @@ const CustomerOrdersPage: React.FC = () => {
                           <div className="flex justify-end items-center pt-4 border-t border-gray-200">
                             <div className="text-right space-y-1">
                               <div className="text-xs text-gray-600">
-                                Total Items: {receiveForm.items.reduce((sum, item) => sum + item.quantity, 0)}
+                                Total Items: {receiveForm.items.filter(i => i.selected).reduce((sum, item) => sum + item.quantity, 0)}
                               </div>
                               <div className="text-xs font-bold text-gray-900">
-                                Total Value: {formatCurrency(receiveForm.items.reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0))}
+                                Total Value: {formatCurrency(receiveForm.items.filter(i => i.selected).reduce((sum, item) => sum + (item.quantity * item.unit_cost), 0))}
                               </div>
                             </div>
                           </div>
@@ -3140,7 +3172,7 @@ const CustomerOrdersPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleReceiveToStock}
-                      disabled={receiveLoading || !receiveForm.store_id || receiveForm.items.some(item => item.quantity <= 0)}
+                      disabled={receiveLoading || !receiveForm.store_id || !receiveForm.items.some(item => item.selected) || receiveForm.items.some(item => item.selected && item.quantity <= 0)}
                       className="px-6 py-3 text-sm font-medium text-white bg-orange-600 border border-transparent rounded-lg hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {receiveLoading ? 'Processing...' : 'Receive to Stock'}
