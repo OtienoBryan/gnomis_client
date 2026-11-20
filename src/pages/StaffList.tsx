@@ -80,7 +80,7 @@ const StaffList: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedEmploymentType, setSelectedEmploymentType] = useState('');
   const [selectedGender, setSelectedGender] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy] = useState<'name' | 'role' | 'date'>('name'); // Future use for sorting
   const [sortOrder] = useState<'asc' | 'desc'>('asc'); // Future use for sorting
@@ -88,7 +88,9 @@ const StaffList: React.FC = () => {
   const [actionMenuStaffId, setActionMenuStaffId] = useState<number | null>(null);
   const [expandedPhoto, setExpandedPhoto] = useState<{url: string, name: string} | null>(null);
   const [activeTab, setActiveTab] = useState<string>('personal');
-  const [managerId, setManagerId] = useState<number | ''>('');
+  const [, setManagerId] = useState<number | ''>('');
+  const [minAge, setMinAge] = useState('');
+  const [maxAge, setMaxAge] = useState('');
   const [benefit1, setBenefit1] = useState<string>('');
   const [benefit2, setBenefit2] = useState<string>('');
   const [benefit3, setBenefit3] = useState<string>('');
@@ -251,6 +253,27 @@ const StaffList: React.FC = () => {
       filtered = filtered.filter(member => member.gender === selectedGender);
     }
     
+    // Apply age range filter (age is calculated from date of birth; staff without a DOB are excluded)
+    if (minAge !== '' || maxAge !== '') {
+      const ageOf = (dob?: string | null): number | null => {
+        if (!dob) return null;
+        const d = new Date(dob);
+        if (isNaN(d.getTime())) return null;
+        const today = new Date();
+        let age = today.getFullYear() - d.getFullYear();
+        const m = today.getMonth() - d.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+        return age;
+      };
+      filtered = filtered.filter(member => {
+        const age = ageOf(member.date_of_birth);
+        if (age === null) return false;
+        if (minAge !== '' && age < Number(minAge)) return false;
+        if (maxAge !== '' && age > Number(maxAge)) return false;
+        return true;
+      });
+    }
+
     // Apply sorting
     filtered.sort((a, b) => {
       let aValue: string | number = '';
@@ -282,7 +305,7 @@ const StaffList: React.FC = () => {
     });
     
     setFilteredStaff(filtered);
-  }, [staff, searchTerm, selectedRole, selectedStatus, selectedEmploymentType, selectedGender, sortBy, sortOrder]);
+  }, [staff, searchTerm, selectedRole, selectedStatus, selectedEmploymentType, selectedGender, minAge, maxAge, sortBy, sortOrder]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -488,6 +511,8 @@ const StaffList: React.FC = () => {
     setSelectedStatus('all');
     setSelectedEmploymentType('');
     setSelectedGender('');
+    setMinAge('');
+    setMaxAge('');
   };
 
   const handlePhotoClick = (photoUrl: string, staffName: string) => {
@@ -793,7 +818,7 @@ const StaffList: React.FC = () => {
                 >
                   <Icons.Filter />
                   <span className="ml-2">Filters</span>
-                  {(selectedRole || selectedStatus !== 'all' || selectedEmploymentType || selectedGender) && (
+                  {(selectedRole || selectedStatus !== 'all' || selectedEmploymentType || selectedGender || minAge || maxAge) && (
                     <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] bg-red-100 text-red-800">
                       {selectedStatus === 'active' ? 'Active' : selectedStatus === 'inactive' ? 'Inactive' : 'Filtered'}
                     </span>
@@ -887,7 +912,7 @@ const StaffList: React.FC = () => {
             {/* Advanced Filters */}
             {showFilters && (
               <div className="mt-4 pt-4 border-t border-gray-200">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                   <div>
                     <label className="block text-[10px] font-medium text-gray-700 mb-1">Role</label>
                     <select
@@ -944,7 +969,32 @@ const StaffList: React.FC = () => {
                       <option value="Other">Other</option>
                     </select>
                   </div>
-                  
+
+                  <div>
+                    <label className="block text-[10px] font-medium text-gray-700 mb-1">Age Range</label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={0}
+                        max={120}
+                        placeholder="Min"
+                        value={minAge}
+                        onChange={(e) => setMinAge(e.target.value)}
+                        className="block w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-[10px]"
+                      />
+                      <span className="text-[10px] text-gray-500">to</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={120}
+                        placeholder="Max"
+                        value={maxAge}
+                        onChange={(e) => setMaxAge(e.target.value)}
+                        className="block w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-[10px]"
+                      />
+                    </div>
+                  </div>
+
                   <div className="flex items-end">
               <button
                       onClick={clearFilters}
@@ -991,43 +1041,43 @@ const StaffList: React.FC = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Staff Member
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden">
                         Role
                       </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Designation
                       </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Department
                       </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Employee #
                       </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         ID Number
                       </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Contact
                       </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Status
                       </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Employment Type
                       </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Gender
                       </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Business Email
                       </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Department Email
                       </th>
-                      <th scope="col" className="px-3 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Salary
                       </th>
                       <th scope="col" className="relative px-6 py-3">
@@ -1045,85 +1095,85 @@ const StaffList: React.FC = () => {
                                 <img
                                   src={member.photo_url}
                                   alt={member.name}
-                                  className="w-10 h-10 rounded-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                                  className="w-14 h-14 rounded-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
                                   onClick={() => handlePhotoClick(member.photo_url, member.name)}
                                 />
                               ) : (
-                                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center">
                                   <span className="text-xs font-semibold text-gray-600">
                                     {member.name.charAt(0).toUpperCase()}
                                   </span>
                                 </div>
                               )}
-                              <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
+                              <div className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white ${
                                 member.status === 1 ? 'bg-green-400' : 'bg-red-400'
                               }`}></div>
                             </div>
-                            <div className="ml-4">
-                              <div className="text-[10px] font-medium text-gray-900">{member.name}</div>
-                              <div className="text-[10px] text-gray-500">{member.role}</div>
+                            <div className="ml-3">
+                              <div className="text-xs font-medium text-gray-900">{member.name}</div>
+                              <div className="text-xs text-gray-500">{member.role}</div>
                             </div>
                           </div>
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap hidden">
-                          <div className="text-[10px] text-gray-900">{member.role}</div>
+                          <div className="text-xs text-gray-900">{member.role}</div>
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-[10px] text-gray-900">{member.designation || member.role || <span className="text-gray-500">-</span>}</div>
+                          <div className="text-xs text-gray-900">{member.designation || member.role || <span className="text-gray-500">-</span>}</div>
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-[10px] text-gray-900">
+                          <div className="text-xs text-gray-900">
                             {member.department_name || member.department || <span className="text-gray-500">-</span>}
                           </div>
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-[10px] text-gray-900 font-mono">{member.empl_no}</div>
+                          <div className="text-xs text-gray-900 font-mono">{member.empl_no}</div>
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-[10px] text-gray-900 font-mono">{member.id_no}</div>
+                          <div className="text-xs text-gray-900 font-mono">{member.id_no}</div>
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-[10px] text-gray-900">
+                          <div className="text-xs text-gray-900">
                             {member.phone_number || <span className="text-gray-500">-</span>}
                           </div>
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${getStatusBadgeColor(member.status)}`}>
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getStatusBadgeColor(member.status)}`}>
                             {member.status === 1 ? 'Active' : 'Inactive'}
                           </span>
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           {member.employment_type && (
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${getEmploymentTypeBadgeColor(member.employment_type)}`}>
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getEmploymentTypeBadgeColor(member.employment_type)}`}>
                               {member.employment_type}
                             </span>
                           )}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           {member.gender ? (
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${getGenderBadgeColor(member.gender)}`}>
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getGenderBadgeColor(member.gender)}`}>
                               {member.gender}
                             </span>
                           ) : (
-                            <span className="text-[10px] text-gray-500">-</span>
+                            <span className="text-xs text-gray-500">-</span>
                           )}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-[10px] text-gray-900">
+                          <div className="text-xs text-gray-900">
                             {member.business_email || <span className="text-gray-500">-</span>}
                           </div>
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-[10px] text-gray-900">
+                          <div className="text-xs text-gray-900">
                             {member.department_email || <span className="text-gray-500">-</span>}
                           </div>
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
-                          <div className="text-[10px] text-gray-900 font-mono">
+                          <div className="text-xs text-gray-900 font-mono">
                             {member.salary ? member.salary.toLocaleString() : <span className="text-gray-500">-</span>}
                           </div>
                         </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-right text-[10px] font-medium">
+                        <td className="px-3 py-2 whitespace-nowrap text-right text-xs font-medium">
                           <div className="relative">
                             <button
                               onClick={(e) => {
@@ -1722,27 +1772,6 @@ const StaffList: React.FC = () => {
                         className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-[10px]"
                         placeholder="hr@company.com"
                       />
-                    </div>
-                    <div>
-                      <label htmlFor="manager_id" className="block text-[10px] font-medium text-gray-700 mb-2">
-                        Manager
-                      </label>
-                      <select
-                        name="manager_id"
-                        id="manager_id"
-                        value={managerId}
-                        onChange={(e) => setManagerId(e.target.value === '' ? '' : parseInt(e.target.value))}
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-[10px]"
-                      >
-                        <option value="">Select a manager</option>
-                        {staff
-                          .filter(member => member.status === 1 && (isEditMode ? member.id !== editingStaff?.id : true))
-                          .map((member) => (
-                            <option key={member.id} value={member.id}>
-                              {member.name} {member.designation ? `- ${member.designation}` : ''}
-                            </option>
-                          ))}
-                      </select>
                     </div>
                     <div className="col-span-1 md:col-span-2">
                       <label className="block text-[10px] font-medium text-gray-700 mb-2">

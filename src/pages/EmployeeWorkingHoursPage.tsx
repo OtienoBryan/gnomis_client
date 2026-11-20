@@ -74,12 +74,12 @@ const withSpent = (r: WorkingHourRecord): WorkingHourRecord => {
     if (mins <= 0) return { ...r, time_spent: '-', lunch_minutes: LUNCH_MINUTES };
     return { ...r, lunch_minutes: LUNCH_MINUTES, time_spent: fmtMins(Math.max(0, mins - LUNCH_MINUTES)) };
   }
-  // Still checked in: running total since check-in (lunch is deducted once checked out)
+  // Still checked in: running total since check-in, less the 30-minute lunch
   const mins = Math.floor((Date.now() - start.getTime()) / 60000);
   return {
     ...r,
     lunch_minutes: LUNCH_MINUTES,
-    time_spent: mins > 0 ? `${fmtMins(mins)} (running)` : '0h 0m (running)'
+    time_spent: `${fmtMins(Math.max(0, mins - LUNCH_MINUTES))} (running)`
   };
 };
 

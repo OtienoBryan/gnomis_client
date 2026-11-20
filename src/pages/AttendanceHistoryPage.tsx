@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiSearch, FiFilter, FiDownload, FiRefreshCw, FiUser, FiClock, FiCalendar, FiCheck, FiX, FiChevronLeft, FiChevronRight, FiUsers, FiAlertCircle, FiEdit2, FiSave, FiPlus } from 'react-icons/fi';
+import { FiSearch, FiFilter, FiDownload, FiRefreshCw, FiUser, FiCalendar, FiX, FiChevronLeft, FiChevronRight, FiChevronDown, FiAlertCircle, FiEdit2, FiSave, FiPlus, FiLogOut } from 'react-icons/fi';
 import api from '../services/api';
 
 interface AttendanceRecord {
@@ -24,9 +24,17 @@ interface Staff {
   role: string;
   department: string;
   photo_url?: string;
+  status?: number;
 }
 
 const PAGE_SIZE = 20;
+const LUNCH_MINUTES = 30;
+
+// Times are stored and shown as the wall-clock time that was entered (no UTC conversion).
+// datetime-local value ("YYYY-MM-DDTHH:mm") -> "YYYY-MM-DD HH:mm:00"
+const toDbTime = (v: string) => (v ? `${v.replace('T', ' ').slice(0, 16)}:00` : null);
+// "YYYY-MM-DD HH:mm:ss" -> datetime-local value
+const toInputTime = (v: string | null) => (v ? v.replace(' ', 'T').slice(0, 16) : '');
 
 const AttendanceHistoryPage: React.FC = () => {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
@@ -40,7 +48,13 @@ const AttendanceHistoryPage: React.FC = () => {
   const [department, setDepartment] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [reloadKey, setReloadKey] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
+  const [showAbsent, setShowAbsent] = useState(false);
+  const [checkoutRecord, setCheckoutRecord] = useState<AttendanceRecord | null>(null);
+  const [checkoutTime, setCheckoutTime] = useState('');
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'department' | 'checkin'>('date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showEditModal, setShowEditModal] = useState(false);
@@ -96,7 +110,7 @@ const AttendanceHistoryPage: React.FC = () => {
       }
     };
     fetchAttendance();
-  }, [startDate, endDate, staffId]);
+  }, [startDate, endDate, staffId, reloadKey]);
 
   // Filter and sort attendance
   useEffect(() => {
@@ -168,7 +182,7 @@ const AttendanceHistoryPage: React.FC = () => {
     const late = attendance.filter(record => {
       if (!record.checkin_time) return false;
       const checkinTime = new Date(record.checkin_time);
-      const expectedTime = new Date(record.date + ' 09:00:00'); // Assuming 9 AM start time
+      const expectedTime = new Date(String(record.date).slice(0, 10) + ' 08:00:00'); // 8:00 AM start time
       return checkinTime > expectedTime;
     }).length;
     
@@ -185,11 +199,17 @@ const AttendanceHistoryPage: React.FC = () => {
     return { hours, minutes };
   };
 
-  const getStatusColor = (record: AttendanceRecord) => {
-    if (!record.checkin_time) return 'bg-red-100 text-red-800 border-red-200';
-    if (!record.checkout_time) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-    return 'bg-green-100 text-green-800 border-green-200';
+  // Working hours = time spent minus the 30-minute lunch break (never negative).
+  // Records still checked in use the running time up to now.
+  const workingMinutes = (record: AttendanceRecord): number | null => {
+    const ts = calculateTimeSpent(record.checkin_time, record.checkout_time);
+    if (!ts) return null;
+    const total = ts.hours * 60 + ts.minutes;
+    if (total < 0) return null;
+    return Math.max(0, total - LUNCH_MINUTES);
   };
+
+  const fmtMins = (mins: number) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
 
   const getStatusText = (record: AttendanceRecord) => {
     if (!record.checkin_time) return 'Absent';
@@ -206,7 +226,7 @@ const AttendanceHistoryPage: React.FC = () => {
   };
 
   const exportToCSV = () => {
-    const headers = ['Name', 'Department', 'Role', 'Date', 'Check-in', 'Check-out', 'Status', 'Time Spent', 'Corrected'];
+    const headers = ['Name', 'Department', 'Role', 'Date', 'Check-in', 'Check-out', 'Status', 'Time Spent', 'Lunch (min)', 'Working Hours', 'Corrected'];
     const csvContent = [
       headers.join(','),
       ...filteredAttendance.map(record => {
@@ -221,6 +241,8 @@ const AttendanceHistoryPage: React.FC = () => {
           record.checkout_time ? new Date(record.checkout_time).toLocaleTimeString() : '-',
           getStatusText(record),
           timeSpentStr,
+          record.checkin_time ? LUNCH_MINUTES : 0,
+          workingMinutes(record) === null ? '-' : fmtMins(workingMinutes(record) as number),
           record.corrected ? 'Yes' : 'No'
         ].join(',');
       })
@@ -235,12 +257,52 @@ const AttendanceHistoryPage: React.FC = () => {
     window.URL.revokeObjectURL(url);
   };
 
+  // Post check-out for a record that has a check-in but no check-out
+  const openCheckoutModal = (record: AttendanceRecord) => {
+    setCheckoutRecord(record);
+    setCheckoutTime('');
+    setCheckoutError(null);
+  };
+
+  const closeCheckoutModal = () => {
+    setCheckoutRecord(null);
+    setCheckoutTime('');
+    setCheckoutError(null);
+  };
+
+  const handleCheckoutSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!checkoutRecord || !checkoutTime) return;
+    const day = String(checkoutRecord.date).slice(0, 10);
+    const out = new Date(`${day}T${checkoutTime}`);
+    if (checkoutRecord.checkin_time && out <= new Date(checkoutRecord.checkin_time)) {
+      setCheckoutError('Check-out time must be after the check-in time');
+      return;
+    }
+    setCheckoutLoading(true);
+    setCheckoutError(null);
+    try {
+      await api.put(`/attendance/${checkoutRecord.id}`, {
+        date: day,
+        checkin_time: checkoutRecord.checkin_time,
+        checkout_time: `${day} ${checkoutTime}:00`,
+        checkout_only: true
+      });
+      closeCheckoutModal();
+      setReloadKey(k => k + 1);
+    } catch (err: any) {
+      setCheckoutError(err.response?.data?.message || err.message || 'Failed to post check-out');
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
   // Edit functions
   const openEditModal = (record: AttendanceRecord) => {
     setEditingRecord(record);
     setEditFormData({
-      checkin_time: record.checkin_time ? new Date(record.checkin_time).toISOString().slice(0, 16) : '',
-      checkout_time: record.checkout_time ? new Date(record.checkout_time).toISOString().slice(0, 16) : '',
+      checkin_time: toInputTime(record.checkin_time),
+      checkout_time: toInputTime(record.checkout_time),
       date: record.date
     });
     setShowEditModal(true);
@@ -263,8 +325,8 @@ const AttendanceHistoryPage: React.FC = () => {
     setEditLoading(true);
     try {
       const updateData = {
-        checkin_time: editFormData.checkin_time ? new Date(editFormData.checkin_time).toISOString() : null,
-        checkout_time: editFormData.checkout_time ? new Date(editFormData.checkout_time).toISOString() : null,
+        checkin_time: toDbTime(editFormData.checkin_time),
+        checkout_time: toDbTime(editFormData.checkout_time),
         date: editFormData.date
       };
 
@@ -380,8 +442,8 @@ const AttendanceHistoryPage: React.FC = () => {
       const createData = {
         staff_id: parseInt(addFormData.staff_id),
         date: addFormData.date,
-        checkin_time: addFormData.checkin_time ? new Date(addFormData.checkin_time).toISOString() : null,
-        checkout_time: addFormData.checkout_time ? new Date(addFormData.checkout_time).toISOString() : null
+        checkin_time: toDbTime(addFormData.checkin_time),
+        checkout_time: toDbTime(addFormData.checkout_time)
       };
 
       await api.post('/attendance', createData);
@@ -404,503 +466,575 @@ const AttendanceHistoryPage: React.FC = () => {
 
   const stats = getStats();
 
-  if (loading) {
-    return (
-      <div className="w-full py-8 px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-center items-center py-16">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
-        </div>
-      </div>
-    );
-  }
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isoDay = (d: Date) => {
+    const x = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    return x.toISOString().slice(0, 10);
+  };
+
+  const quickRanges: { label: string; get: () => [string, string] }[] = [
+    { label: 'Today', get: () => [isoDay(new Date()), isoDay(new Date())] },
+    {
+      label: 'Yesterday',
+      get: () => {
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        return [isoDay(d), isoDay(d)];
+      }
+    },
+    {
+      label: 'This week',
+      get: () => {
+        const d = new Date();
+        const monday = new Date(d);
+        monday.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+        return [isoDay(monday), isoDay(d)];
+      }
+    },
+    {
+      label: 'This month',
+      get: () => {
+        const d = new Date();
+        return [isoDay(new Date(d.getFullYear(), d.getMonth(), 1)), isoDay(d)];
+      }
+    }
+  ];
+
+  const activeRange = quickRanges.find(r => {
+    const [s, e] = r.get();
+    return startDate === s && endDate === e;
+  })?.label;
+
+  const initials = (name: string) =>
+    (name || '?').split(' ').filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase()).join('');
+
+  const fmtTime = (v: string | null) =>
+    v ? new Date(v).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+
+  const isLate = (r: AttendanceRecord) =>
+    !!r.checkin_time && new Date(r.checkin_time) > new Date(`${String(r.date).slice(0, 10)} 08:00:00`);
+
+  const sortHeader = (key: 'date' | 'name' | 'department' | 'checkin', label: string) => (
+    <button
+      type="button"
+      onClick={() => {
+        setSortBy(key);
+        setSortOrder(sortBy === key && sortOrder === 'asc' ? 'desc' : 'asc');
+      }}
+      className="inline-flex items-center gap-1 hover:text-gray-900"
+    >
+      {label}
+      <span className={sortBy === key ? 'text-red-600' : 'text-gray-300'}>
+        {sortBy === key ? (sortOrder === 'asc' ? '↑' : '↓') : '↕'}
+      </span>
+    </button>
+  );
+
+  const pageNumbers = (): (number | '…')[] => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const out: (number | '…')[] = [1];
+    const from = Math.max(2, page - 1);
+    const to = Math.min(totalPages - 1, page + 1);
+    if (from > 2) out.push('…');
+    for (let i = from; i <= to; i++) out.push(i);
+    if (to < totalPages - 1) out.push('…');
+    out.push(totalPages);
+    return out;
+  };
+
+  // Absent = active staff (matching the employee/department filters) with no check-in in the selected period
+  const checkedInIds = new Set(attendance.filter(r => r.checkin_time).map(r => r.staff_id));
+  const notCheckedInStaff = staffList
+    .filter(s =>
+      (s.status === undefined || s.status === 1) &&
+      (!staffId || String(s.id) === staffId) &&
+      (!department || s.department === department) &&
+      !checkedInIds.has(s.id)
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const notCheckedIn = notCheckedInStaff.length;
+
+  const statCards: { label: string; value: number; text: string; onClick?: () => void }[] = [
+    { label: 'Present', value: stats.present, text: 'text-green-700' },
+    { label: 'Not checked in', value: notCheckedIn, text: 'text-red-700', onClick: () => setShowAbsent(true) },
+    { label: 'Late arrivals', value: stats.late, text: 'text-amber-700' }
+  ];
+
+  const inputCls =
+    'block w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-1 focus:ring-red-500 focus:border-red-500 text-sm';
 
   return (
-    <div className="w-full py-8 px-4 sm:px-6 lg:px-8">
+    <div className="w-full min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Attendance History</h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Track and manage employee attendance records (showing today's records by default)
-            </p>
-          </div>
-                    <div className="flex items-center space-x-3">
-            <button
-              onClick={() => navigate(-1)}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:bg-gray-50"
-            >
-              <FiChevronLeft className="w-4 h-4 mr-2" />
-              Back
-            </button>
-            <button
-              onClick={openAddModal}
-              className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
-            >
-              <FiPlus className="w-4 h-4 mr-2" />
-              Add Record
-            </button>
-            <button
-              onClick={exportToCSV}
-              className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-            >
-              <FiDownload className="w-4 h-4 mr-2" />
-              Export CSV
-            </button>
-          </div>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Attendance History</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            {startDate && endDate && startDate === endDate
+              ? `Records for ${new Date(startDate).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`
+              : startDate
+                ? `Records from ${new Date(startDate).toLocaleDateString()}${endDate ? ` to ${new Date(endDate).toLocaleDateString()}` : ' onwards'}`
+                : 'All attendance records'}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => navigate(-1)}
+            className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:bg-gray-50"
+          >
+            <FiChevronLeft className="w-4 h-4 mr-1" />
+            Back
+          </button>
+          <button
+            onClick={() => setReloadKey(k => k + 1)}
+            className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:bg-gray-50"
+          >
+            <FiRefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+          <button
+            onClick={exportToCSV}
+            className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:bg-gray-50"
+          >
+            <FiDownload className="w-4 h-4 mr-1" />
+            Export CSV
+          </button>
+          <button
+            onClick={openAddModal}
+            className="inline-flex items-center px-3 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
+          >
+            <FiPlus className="w-4 h-4 mr-1" />
+            Add Record
+          </button>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <FiUsers className="w-6 h-6 text-red-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Records</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.total}</p>
-            </div>
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3 mb-5 max-w-xl">
+        {statCards.map(c => (
+          <div
+            key={c.label}
+            onClick={c.onClick}
+            role={c.onClick ? 'button' : undefined}
+            tabIndex={c.onClick ? 0 : undefined}
+            onKeyDown={c.onClick ? (e) => { if (e.key === 'Enter') c.onClick!(); } : undefined}
+            title={c.onClick ? 'Click to view the list' : undefined}
+            className={`bg-white rounded-lg border border-gray-200 px-3 py-2 ${c.onClick ? 'cursor-pointer hover:border-red-300 hover:shadow-sm transition' : ''}`}
+          >
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{c.label}</p>
+            <p className={`mt-0.5 text-xl font-bold leading-none ${c.text}`}>{loading ? '–' : c.value}</p>
           </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <FiCheck className="w-6 h-6 text-green-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Present</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.present}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <FiX className="w-6 h-6 text-red-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Absent</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.absent}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-yellow-100 rounded-lg">
-              <FiAlertCircle className="w-6 h-6 text-yellow-600" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Late Arrivals</p>
-              <p className="text-2xl font-semibold text-gray-900">{stats.late}</p>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow mb-6">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            {/* Search */}
-            <div className="relative flex-1 max-w-md">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <FiSearch className="w-5 h-5 text-gray-400" />
-              </div>
+      {/* Filters (collapsible) */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <button
+          type="button"
+          onClick={() => setShowFilters(v => !v)}
+          className="w-full flex items-center justify-between text-left"
+          aria-expanded={showFilters}
+        >
+          <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-900">
+            <FiFilter className="w-4 h-4 text-gray-500" />
+            Filters
+            {(searchTerm || staffId || department || startDate !== todayStr || endDate) && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-100 text-red-700">Active</span>
+            )}
+          </span>
+          <FiChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+        </button>
+
+        {showFilters && (
+        <div className="mt-4">
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <span className="inline-flex items-center text-xs font-medium text-gray-500 mr-1">
+            Quick range
+          </span>
+          {quickRanges.map(r => (
+            <button
+              key={r.label}
+              onClick={() => {
+                const [s, e] = r.get();
+                setStartDate(s);
+                setEndDate(e);
+              }}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                activeRange === r.label
+                  ? 'bg-red-600 border-red-600 text-white'
+                  : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+          <button
+            onClick={() => {
+              setStartDate('');
+              setEndDate('');
+            }}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              !startDate && !endDate
+                ? 'bg-red-600 border-red-600 text-white'
+                : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            All time
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
+          <div className="xl:col-span-2">
+            <label className="block text-xs font-medium text-gray-600 mb-1">Search</label>
+            <div className="relative">
+              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search by name, department, or role..."
+                placeholder="Name, department or role..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-sm"
+                className={`${inputCls} pl-9`}
               />
             </div>
-
-            {/* Controls */}
-            <div className="flex items-center space-x-4">
-              {/* Filters Toggle */}
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:bg-gray-50"
-              >
-                <FiFilter className="w-4 h-4 mr-2" />
-                Filters
-                {(startDate || endDate || staffId || department) && (
-                  <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-800">
-                    Active
-                  </span>
-                )}
-              </button>
-
-              {/* Refresh */}
-              <button
-                onClick={() => window.location.reload()}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:bg-gray-50"
-              >
-                <FiRefreshCw className="w-4 h-4 mr-2" />
-                Refresh
-              </button>
-            </div>
-      </div>
-
-          {/* Advanced Filters */}
-          {showFilters && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-          <div className="relative">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-sm"
-            />
-            {startDate === new Date().toISOString().slice(0, 10) && (
-              <span className="absolute right-2 top-1/2 transform -translate-y-1/2 text-xs text-red-600 bg-red-100 px-2 py-1 rounded">
-                Today
-              </span>
-            )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">From</label>
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">To</label>
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Employee</label>
+            <select value={staffId} onChange={(e) => setStaffId(e.target.value)} className={inputCls}>
+              <option value="">All employees</option>
+              {staffList.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Department</label>
+            <select value={department} onChange={(e) => setDepartment(e.target.value)} className={inputCls}>
+              <option value="">All departments</option>
+              {getDepartments().map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
           </div>
         </div>
-                
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-          <input
-            type="date"
-            value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-sm"
-          />
-        </div>
-                
-        <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Employee</label>
-          <select
-            value={staffId}
-                    onChange={(e) => setStaffId(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-sm"
-                  >
-                    <option value="">All Employees</option>
-                    {staffList.map((staff) => (
-                      <option key={staff.id} value={staff.id}>
-                        {staff.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                  <select
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-sm"
-                  >
-                    <option value="">All Departments</option>
-                    {getDepartments().map((dept) => (
-                      <option key={dept} value={dept}>
-                        {dept}
-                      </option>
-            ))}
-          </select>
-        </div>
-                
-                <div className="flex items-end">
-                  <button
-                    onClick={clearFilters}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white hover:bg-gray-50"
-                  >
-                    Clear Filters
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* Error Display */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center">
-            <div className="text-red-600 font-medium">Error:</div>
-            <div className="text-red-700 ml-2">{error}</div>
-            <button
-              onClick={() => setError(null)}
-              className="ml-auto text-red-500 hover:text-red-700"
-            >
-              ×
+        {(searchTerm || staffId || department || startDate !== todayStr || endDate) && (
+          <div className="mt-3 flex justify-end">
+            <button onClick={clearFilters} className="text-xs text-red-600 hover:text-red-800 font-medium">
+              Reset filters
             </button>
           </div>
+        )}
+        </div>
+        )}
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-6 flex items-center text-sm">
+          <span className="text-red-700">{error}</span>
+          <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700 text-lg leading-none">×</button>
         </div>
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-200 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-gray-900">
+            Records <span className="text-gray-400 font-normal">({filteredAttendance.length})</span>
+          </h3>
+          {loading && <span className="text-xs text-gray-500">Loading…</span>}
+        </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
-              <tr>
-                <th 
-                  scope="col" 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => {
-                    setSortBy('name');
-                    setSortOrder(sortBy === 'name' && sortOrder === 'asc' ? 'desc' : 'asc');
-                  }}
-                >
-                  <div className="flex items-center">
-                    <FiUser className="w-4 h-4 mr-2" />
-                    Employee
-                    {sortBy === 'name' && (
-                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Image
-                </th>
-                <th 
-                  scope="col" 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => {
-                    setSortBy('department');
-                    setSortOrder(sortBy === 'department' && sortOrder === 'asc' ? 'desc' : 'asc');
-                  }}
-                >
-                  <div className="flex items-center">
-                    Department
-                    {sortBy === 'department' && (
-                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th 
-                  scope="col" 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => {
-                    setSortBy('date');
-                    setSortOrder(sortBy === 'date' && sortOrder === 'asc' ? 'desc' : 'asc');
-                  }}
-                >
-                  <div className="flex items-center">
-                    <FiCalendar className="w-4 h-4 mr-2" />
-                    Date
-                    {sortBy === 'date' && (
-                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th 
-                  scope="col" 
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => {
-                    setSortBy('checkin');
-                    setSortOrder(sortBy === 'checkin' && sortOrder === 'asc' ? 'desc' : 'asc');
-                  }}
-                >
-                  <div className="flex items-center">
-                    <FiClock className="w-4 h-4 mr-2" />
-                    Check-in
-                    {sortBy === 'checkin' && (
-                      <span className="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
-                    )}
-      </div>
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Check-out
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Time Spent
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Corrected
-                </th>
-                <th scope="col" className="relative px-6 py-3">
-                  <span className="sr-only">Actions</span>
-                </th>
+              <tr className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th className="px-5 py-3">{sortHeader('name', 'Employee')}</th>
+                <th className="px-5 py-3">{sortHeader('department', 'Department')}</th>
+                <th className="px-5 py-3">{sortHeader('date', 'Date')}</th>
+                <th className="px-5 py-3">{sortHeader('checkin', 'Check-in')}</th>
+                <th className="px-5 py-3">Check-out</th>
+                <th className="px-5 py-3">Time spent</th>
+                <th className="px-5 py-3">Lunch</th>
+                <th className="px-5 py-3">Working hours</th>
+                <th className="px-5 py-3"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {paginated.length === 0 ? (
+            <tbody className="bg-white divide-y divide-gray-100">
+              {loading && paginated.length === 0 ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    <td colSpan={9} className="px-5 py-4">
+                      <div className="h-8 rounded bg-gray-100 animate-pulse" />
+                    </td>
+                  </tr>
+                ))
+              ) : paginated.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
-                    <FiCalendar className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                    <div className="text-lg font-medium">No attendance records found</div>
-                    <div className="text-sm">
-                      {searchTerm || startDate || endDate || staffId || department
-                        ? 'Try adjusting your search or filters'
-                        : 'No attendance records available for today'}
-                    </div>
+                  <td colSpan={9} className="px-6 py-14 text-center text-gray-500">
+                    <FiCalendar className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+                    <div className="text-base font-medium text-gray-700">No attendance records found</div>
+                    <div className="text-sm">Try a different date range or clear the filters</div>
                   </td>
                 </tr>
               ) : (
                 paginated.map((record) => {
-                  const checkin = record.checkin_time ? new Date(record.checkin_time) : null;
-                  const checkout = record.checkout_time ? new Date(record.checkout_time) : null;
                   const timeSpent = calculateTimeSpent(record.checkin_time, record.checkout_time);
-                  
+                  const late = isLate(record);
+                  const status = !record.checkin_time ? 'absent' : !record.checkout_time ? 'open' : 'done';
                   return (
-                    <tr key={record.id} className="hover:bg-gray-50 transition-colors duration-150">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center">
-                              <FiUser className="h-5 w-5 text-red-600" />
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">{record.name}</div>
-                            <div className="text-sm text-gray-500">{record.role || 'Employee'}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex-shrink-0 h-12 w-12">
+                    <tr key={record.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-5 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-3">
                           {record.photo_url ? (
                             <img
                               src={record.photo_url}
                               alt={record.name}
-                              className="h-12 w-12 rounded-full object-cover border-2 border-gray-200"
+                              className="h-12 w-12 rounded-full object-cover border border-gray-200"
                             />
                           ) : (
-                            <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center border-2 border-gray-200">
-                              <FiUser className="h-6 w-6 text-gray-400" />
+                            <div className="h-12 w-12 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-sm font-semibold">
+                              {initials(record.name)}
                             </div>
                           )}
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{record.name}</div>
+                            <div className="text-xs text-gray-500">{record.role || 'Employee'}</div>
+                          </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{record.department || '-'}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {record.date ? new Date(record.date).toLocaleDateString() : '-'}
-                        </div>
+                      <td className="px-5 py-3 whitespace-nowrap text-sm text-gray-700">{record.department || '-'}</td>
+                      <td className="px-5 py-3 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{record.date ? new Date(record.date).toLocaleDateString() : '-'}</div>
                         <div className="text-xs text-gray-500">
-                          {record.date ? new Date(record.date).toLocaleDateString('en-US', { weekday: 'long' }) : '-'}
+                          {record.date ? new Date(record.date).toLocaleDateString('en-US', { weekday: 'short' }) : ''}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {checkin ? checkin.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {checkout ? checkout.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {timeSpent ? `${timeSpent.hours}h ${timeSpent.minutes}m` : '-'}
-                        </div>
-                      </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(record)}`}>
-                          {getStatusText(record)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {record.corrected ? (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
-                            <FiEdit2 className="w-3 h-3 mr-1" />
-                            Corrected
-                          </span>
+                      <td className="px-5 py-3 whitespace-nowrap">
+                        {record.checkin_time ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-900">{fmtTime(record.checkin_time)}</span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                late ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'
+                              }`}
+                            >
+                              {late ? 'Late' : 'On time'}
+                            </span>
+                          </div>
                         ) : (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
-                            <FiCheck className="w-3 h-3 mr-1" />
-                            Original
-                          </span>
+                          <span className="text-sm text-gray-400">-</span>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <td className="px-5 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {fmtTime(record.checkout_time) || <span className="text-gray-400">-</span>}
+                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {timeSpent ? (
+                          <>
+                            {`${timeSpent.hours}h ${timeSpent.minutes}m`}
+                            {status === 'open' && <span className="ml-1 text-xs text-gray-400">(running)</span>}
+                          </>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap text-sm text-gray-700">
+                        {record.checkin_time ? `${LUNCH_MINUTES}m` : <span className="text-gray-400">-</span>}
+                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                        {(() => {
+                          const wh = workingMinutes(record);
+                          return wh === null ? <span className="text-gray-400">-</span> : fmtMins(wh);
+                        })()}
+                      </td>
+                      <td className="px-5 py-3 whitespace-nowrap text-right">
+                        {record.checkin_time && !record.checkout_time && (
+                          <button
+                            onClick={() => openCheckoutModal(record)}
+                            className="mr-1 inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-red-200 text-xs font-medium text-red-700 hover:bg-red-50 transition-colors"
+                            title="Post check-out time"
+                          >
+                            <FiLogOut className="w-3.5 h-3.5" />
+                            Check-out
+                          </button>
+                        )}
                         <button
                           onClick={() => openEditModal(record)}
-                          className="text-red-600 hover:text-red-900 p-1 rounded hover:bg-red-50 transition-colors duration-150"
+                          className="text-gray-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors"
                           title="Edit attendance record"
                         >
                           <FiEdit2 className="w-4 h-4" />
                         </button>
                       </td>
                     </tr>
-                );
+                  );
                 })
               )}
             </tbody>
           </table>
         </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-            <div className="flex-1 flex justify-between sm:hidden">
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="px-5 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-t border-gray-200">
+            <p className="text-sm text-gray-600">
+              Showing <span className="font-medium">{(page - 1) * PAGE_SIZE + 1}</span>–
+              <span className="font-medium">{Math.min(page * PAGE_SIZE, filteredAttendance.length)}</span> of{' '}
+              <span className="font-medium">{filteredAttendance.length}</span>
+            </p>
+            <nav className="inline-flex items-center gap-1" aria-label="Pagination">
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Previous
+                <FiChevronLeft className="h-4 w-4" />
               </button>
+              {pageNumbers().map((n, i) =>
+                n === '…' ? (
+                  <span key={`e${i}`} className="px-2 text-gray-400">…</span>
+                ) : (
+                  <button
+                    key={n}
+                    onClick={() => setPage(n)}
+                    className={`min-w-[2.25rem] px-2 py-1.5 rounded-lg border text-sm font-medium ${
+                      n === page
+                        ? 'bg-red-600 border-red-600 text-white'
+                        : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                )
+              )}
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Next
+                <FiChevronRight className="h-4 w-4" />
               </button>
-            </div>
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            </nav>
+          </div>
+        )}
+      </div>
+
+      {/* Not checked in list */}
+      {showAbsent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setShowAbsent(false)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{(page - 1) * PAGE_SIZE + 1}</span> to{' '}
-                  <span className="font-medium">{Math.min(page * PAGE_SIZE, filteredAttendance.length)}</span> of{' '}
-                  <span className="font-medium">{filteredAttendance.length}</span> results
+                <h3 className="text-lg font-semibold text-gray-900">Not checked in ({notCheckedInStaff.length})</h3>
+                <p className="text-xs text-gray-500">
+                  {startDate && endDate && startDate === endDate
+                    ? new Date(startDate).toLocaleDateString()
+                    : startDate
+                      ? `${new Date(startDate).toLocaleDateString()}${endDate ? ` – ${new Date(endDate).toLocaleDateString()}` : ' onwards'}`
+                      : 'All time'}
                 </p>
               </div>
-              <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                  <button
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <FiChevronLeft className="h-5 w-5" />
-                  </button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                    <button
-                      key={pageNum}
-                      onClick={() => setPage(pageNum)}
-                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                        pageNum === page
-                          ? 'z-10 bg-red-50 border-red-500 text-red-600'
-                          : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <FiChevronRight className="h-5 w-5" />
-                  </button>
-                </nav>
-              </div>
+              <button onClick={() => setShowAbsent(false)} className="text-gray-400 hover:text-gray-600">
+                <FiX className="w-5 h-5" />
+              </button>
             </div>
-        </div>
+            <div className="overflow-y-auto divide-y divide-gray-100">
+              {notCheckedInStaff.length === 0 ? (
+                <p className="px-6 py-10 text-center text-sm text-gray-500">Everyone has checked in.</p>
+              ) : (
+                notCheckedInStaff.map(s => (
+                  <div key={s.id} className="px-6 py-3 flex items-center gap-3">
+                    {s.photo_url ? (
+                      <img src={s.photo_url} alt={s.name} className="h-10 w-10 rounded-full object-cover border border-gray-200" />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-xs font-semibold">
+                        {initials(s.name)}
+                      </div>
+                    )}
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{s.name}</div>
+                      <div className="text-xs text-gray-500">{[s.role, s.department].filter(Boolean).join(' • ')}</div>
+                    </div>
+                  </div>
+                ))
               )}
-      </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Check-out Modal */}
+      {checkoutRecord && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => !checkoutLoading && closeCheckoutModal()}>
+          <form
+            onSubmit={handleCheckoutSubmit}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full"
+          >
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Post Check-out</h3>
+              <button type="button" onClick={closeCheckoutModal} className="text-gray-400 hover:text-gray-600">
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
+                {checkoutRecord.photo_url ? (
+                  <img src={checkoutRecord.photo_url} alt={checkoutRecord.name} className="h-12 w-12 rounded-full object-cover border border-gray-200" />
+                ) : (
+                  <div className="h-12 w-12 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-sm font-semibold">
+                    {initials(checkoutRecord.name)}
+                  </div>
+                )}
+                <div>
+                  <div className="text-sm font-medium text-gray-900">{checkoutRecord.name}</div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(checkoutRecord.date).toLocaleDateString()} • Checked in at {fmtTime(checkoutRecord.checkin_time)}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Check-out Time *</label>
+                <input
+                  type="time"
+                  value={checkoutTime}
+                  onChange={(e) => setCheckoutTime(e.target.value)}
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-red-500 focus:border-red-500 text-sm"
+                  required
+                />
+              </div>
+              {checkoutTime && checkoutRecord.checkin_time && (() => {
+                const out = new Date(`${String(checkoutRecord.date).slice(0, 10)}T${checkoutTime}`);
+                const spent = Math.floor((out.getTime() - new Date(checkoutRecord.checkin_time).getTime()) / 60000);
+                if (spent <= 0) return null;
+                return (
+                  <div className="bg-red-50 rounded-lg p-3 text-sm text-red-800 flex justify-between">
+                    <span>Time spent: <strong>{fmtMins(spent)}</strong></span>
+                    <span>Working hours (less {LUNCH_MINUTES}m lunch): <strong>{fmtMins(Math.max(0, spent - LUNCH_MINUTES))}</strong></span>
+                  </div>
+                );
+              })()}
+              {checkoutError && <p className="text-sm text-red-600">{checkoutError}</p>}
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+              <button type="button" onClick={closeCheckoutModal} disabled={checkoutLoading} className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                Cancel
+              </button>
+              <button type="submit" disabled={checkoutLoading || !checkoutTime} className="px-4 py-2 text-sm text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50">
+                {checkoutLoading ? 'Saving...' : 'Post Check-out'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {showEditModal && editingRecord && (

@@ -2,6 +2,7 @@ import api from './api';
 import { AxiosError } from 'axios';
 
 export interface Staff {
+  date_of_birth?: string | null;
   id: number;
   name: string;
   photo_url: string;

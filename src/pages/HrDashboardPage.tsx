@@ -242,6 +242,7 @@ const HrDashboardPage: React.FC = () => {
 
   // Same payroll cards as the sales dashboard
   const payrollItems: { to: string; label: string; icon: React.ReactNode; accent: string }[] = [
+    { to: '/payroll-management', label: 'Staff Payroll', icon: <UsersIcon className="h-4 w-4" />, accent: 'bg-red-50 text-red-600' },
     { to: '/payroll-staff', label: 'Staff Payroll Setup', icon: <UsersIcon className="h-4 w-4" />, accent: 'bg-sky-50 text-sky-600' },
     { to: '/payroll-statutory', label: 'Statutory Deductions', icon: <SlidersIcon className="h-4 w-4" />, accent: 'bg-violet-50 text-violet-600' },
     { to: '/payroll-accounts', label: 'Payroll Account Links', icon: <FileTextIcon className="h-4 w-4" />, accent: 'bg-amber-50 text-amber-600' },

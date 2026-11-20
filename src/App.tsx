@@ -60,7 +60,10 @@ import SalesOrderDetailsPage from './pages/SalesOrderDetailsPage';
 import CashAndEquivalentsPage from './pages/CashAndEquivalentsPage';
 import CashAccountDetailsPage from './pages/CashAccountDetailsPage';
 import JournalEntriesPage from './pages/JournalEntriesPage';
-import PayrollManagementPage from './pages/PayrollManagementPage';
+import StaffPayrollPage from './pages/StaffPayrollPage';
+import RunStaffPayrollPage from './pages/RunStaffPayrollPage';
+import StaffPayrollHistoryPage from './pages/StaffPayrollHistoryPage';
+import StaffPayslipPage from './pages/StaffPayslipPage';
 import PayrollDeductionsPage from './pages/PayrollDeductionsPage';
 import SalesRepPayrollPage from './pages/SalesRepPayrollPage';
 import RunSalesRepPayrollPage from './pages/RunSalesRepPayrollPage';
@@ -714,8 +717,23 @@ const App = () => {
               </RoleBasedRoute>
             } />
             <Route path="/payroll-management" element={
-              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance']} fallbackPath="/sales-dashboard">
-                <PayrollManagementPage />
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance', 'hr']} fallbackPath="/sales-dashboard">
+                <StaffPayrollPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/payroll-management/run" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance', 'hr']} fallbackPath="/sales-dashboard">
+                <RunStaffPayrollPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/payroll-management/history" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance', 'hr']} fallbackPath="/sales-dashboard">
+                <StaffPayrollHistoryPage />
+              </RoleBasedRoute>
+            } />
+            <Route path="/payroll-management/payslip/:id" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance', 'hr']} fallbackPath="/sales-dashboard">
+                <StaffPayslipPage />
               </RoleBasedRoute>
             } />
             <Route path="/payroll-deductions" element={

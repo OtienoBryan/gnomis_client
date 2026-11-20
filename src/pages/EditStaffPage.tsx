@@ -949,7 +949,7 @@ const EditStaffPage: React.FC = () => {
       
       // Statutory Details
       const statutoryData = [
-        ['NHIF Number', staffData.nhif_number || 'N/A'],
+        ['SHIF Number',staffData.nhif_number || 'N/A'],
         ['NSSF Number', staffData.nssf_number || 'N/A'],
         ['KRA PIN', staffData.kra_pin || 'N/A'],
         ['Passport Number', staffData.passport_number || 'N/A'],
@@ -1492,27 +1492,6 @@ const EditStaffPage: React.FC = () => {
                       placeholder="hr@company.com"
                     />
                   </div>
-                  <div>
-                    <label htmlFor="manager_id" className="block text-[10px] font-medium text-gray-700 mb-2">
-                      Manager
-                    </label>
-                    <select
-                      name="manager_id"
-                      id="manager_id"
-                      value={managerId}
-                      onChange={(e) => setManagerId(e.target.value === '' ? '' : parseInt(e.target.value))}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-[10px]"
-                    >
-                      <option value="">Select a manager</option>
-                      {staff
-                        .filter(member => member.status === 1 && (id ? member.id !== parseInt(id) : true))
-                        .map((member) => (
-                          <option key={member.id} value={member.id}>
-                            {member.name} {member.designation ? `- ${member.designation}` : ''}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
                   <div className="col-span-1 md:col-span-2">
                     <label className="block text-[10px] font-medium text-gray-700 mb-2">
                       Other Benefits
@@ -1960,7 +1939,7 @@ const EditStaffPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="nhif_number" className="block text-[10px] font-medium text-gray-700 mb-2">
-                      NHIF Number
+                      SHIF Number
                     </label>
                     <input
                       type="text"
@@ -1969,7 +1948,7 @@ const EditStaffPage: React.FC = () => {
                       value={nhifNumber}
                       onChange={(e) => setNhifNumber(e.target.value)}
                       className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-[10px]"
-                      placeholder="NHIF Number"
+                      placeholder="SHIF Number"
                     />
                   </div>
                   <div>
