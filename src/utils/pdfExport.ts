@@ -7,9 +7,20 @@ import jsPDF from 'jspdf';
  * The element is drawn once and sliced into A4 pages. A page is only added when real content
  * spills onto it: a sub-millimetre overflow (padding/rounding) is ignored, which is what used to
  * produce a trailing blank page.
+ *
+ * `options.exportClass` is applied to the captured copy so a page can restyle its PDF (e.g. larger
+ * text, narrower margins) without changing how it looks on screen.
  */
-export const exportElementToA4Pdf = async (element: HTMLElement, filename: string): Promise<void> => {
+export const exportElementToA4Pdf = async (
+  element: HTMLElement,
+  filename: string,
+  options: { exportClass?: string } = {}
+): Promise<void> => {
   const canvas = await html2canvas(element, {
+    // The class is added to the capture copy only, so the page on screen is untouched.
+    onclone: (_doc, cloned) => {
+      if (options.exportClass) cloned.classList.add(options.exportClass);
+    },
     scale: 2,
     backgroundColor: '#ffffff',
     useCORS: true,

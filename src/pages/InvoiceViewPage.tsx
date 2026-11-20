@@ -102,7 +102,7 @@ const InvoiceViewPage: React.FC = () => {
     if (!element) return;
     setGeneratingPdf(true);
     try {
-      await exportElementToA4Pdf(element, `invoice-${invoiceNumber.replace(/\//g, '-')}.pdf`);
+      await exportElementToA4Pdf(element, `invoice-${invoiceNumber.replace(/\//g, '-')}.pdf`, { exportClass: 'pdf-export' });
     } catch (err) {
       console.error('PDF export failed, falling back to print:', err);
       window.print();
@@ -480,6 +480,23 @@ const InvoiceViewPage: React.FC = () => {
           font-weight: bold;
           margin-top: 6px;
         }
+
+
+        /* PDF export: full-width page (small margins) with larger text. Applied to the capture copy only. */
+        .a4-invoice-print.pdf-export {
+          padding: 10mm 7mm;
+        }
+        .pdf-export .company-name { font-size: 22px; }
+        .pdf-export .company-address, .pdf-export .company-tax { font-size: 14px; }
+        .pdf-export .customer-name { font-size: 16px; }
+        .pdf-export .customer-address, .pdf-export .customer-tax { font-size: 14px; }
+        .pdf-export .invoice-title { font-size: 28px; }
+        .pdf-export .meta-label, .pdf-export .meta-value { font-size: 14px; }
+        .pdf-export .invoice-table th, .pdf-export .invoice-table td { font-size: 14px; padding: 8px 8px; }
+        .pdf-export .totals-table { min-width: 340px; }
+        .pdf-export .totals-table td { font-size: 14px; padding: 6px 10px; }
+        .pdf-export .total-row td { font-size: 15px; }
+        .pdf-export .payment-communication, .pdf-export .amount-words { font-size: 13px; }
 
         @media print {
           body { background: #fff !important; }
