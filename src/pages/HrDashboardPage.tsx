@@ -32,7 +32,9 @@ import {
   Trash2Icon,
   ArrowUpRightIcon,
   PercentIcon,
-  InboxIcon
+  InboxIcon,
+  WalletIcon,
+  SlidersIcon
 } from 'lucide-react';
 import io from 'socket.io-client';
 
@@ -238,6 +240,16 @@ const HrDashboardPage: React.FC = () => {
     { to: '/instant-chat', label: 'Chat Room', icon: <MessageCircleIcon className="h-4 w-4" />, tone: 'teal' }
   ];
 
+  // Same payroll cards as the sales dashboard
+  const payrollItems: { to: string; label: string; icon: React.ReactNode; accent: string }[] = [
+    { to: '/payroll-staff', label: 'Staff Payroll Setup', icon: <UsersIcon className="h-4 w-4" />, accent: 'bg-sky-50 text-sky-600' },
+    { to: '/payroll-statutory', label: 'Statutory Deductions', icon: <SlidersIcon className="h-4 w-4" />, accent: 'bg-violet-50 text-violet-600' },
+    { to: '/payroll-accounts', label: 'Payroll Account Links', icon: <FileTextIcon className="h-4 w-4" />, accent: 'bg-amber-50 text-amber-600' },
+    { to: '/sales-rep-payroll', label: 'Sales Rep Payroll', icon: <WalletIcon className="h-4 w-4" />, accent: 'bg-teal-50 text-teal-600' },
+    { to: '/sales-rep-advances', label: 'Salary Advances', icon: <WalletIcon className="h-4 w-4" />, accent: 'bg-indigo-50 text-indigo-600' },
+    { to: '/sales-rep-deductions', label: 'Sales Rep Deductions', icon: <SlidersIcon className="h-4 w-4" />, accent: 'bg-rose-50 text-rose-600' },
+  ];
+
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
@@ -317,6 +329,23 @@ const HrDashboardPage: React.FC = () => {
                   {item.icon}
                 </span>
                 <span className="text-sm font-medium leading-tight text-gray-700 group-hover:text-gray-900">{item.label}</span>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        {/* Payroll */}
+        <section className="mb-6">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Payroll</h2>
+          <div className="flex flex-wrap gap-3.5">
+            {payrollItems.map(item => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="group relative flex min-h-[84px] w-32 flex-col items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-2 py-3 text-center shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md"
+              >
+                <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${item.accent}`}>{item.icon}</span>
+                <span className="text-[11px] font-medium leading-tight text-gray-700">{item.label}</span>
               </Link>
             ))}
           </div>

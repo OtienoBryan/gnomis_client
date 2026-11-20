@@ -2,61 +2,92 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Download, FileText, Pencil, Trash2, X, Printer } from 'lucide-react';
 import { payrollApi, kes, periodLabel, PayrollRun, RunItem, Payslip, Account } from '../services/payrollService';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { statusBadge } from './PayrollRunsPage';
 
 type Detail = Awaited<ReturnType<typeof payrollApi.run>>;
 const input = 'w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-red-500';
 
-const PayslipView: React.FC<{ data: { run: PayrollRun; staff: any; profile: any; payslip: Payslip } }> = ({ data }) => {
+type PayslipData = { run: PayrollRun; staff: any; profile: any; payslip: Payslip };
+
+const PAYSLIP_CSS = `
+.ps{font-family:Arial,sans-serif;font-size:12px;color:#111}
+.ps h2{font-size:15px;text-align:center;margin:0 0 14px;letter-spacing:.5px}
+.ps table{width:100%;border-collapse:collapse;margin-bottom:12px}
+.ps th,.ps td{padding:5px 8px;border:1px solid #bbb;text-align:left}
+.ps th{background:#f1f1f1;font-weight:bold}
+.ps .r{text-align:right}
+.ps .tot td{font-weight:bold;background:#fafafa}
+.ps .net{display:flex;justify-content:space-between;border:2px solid #111;padding:8px 10px;font-size:14px;font-weight:bold}
+.ps .foot{margin-top:8px;font-size:10px;color:#666}
+`;
+
+const amt = (v: number) => Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const PayslipView: React.FC<{ data: PayslipData }> = ({ data }) => {
   const { run, staff, profile, payslip: p } = data;
-  const row = (name: string, amount: number, sign = '') => (
-    <tr key={name}><td className="py-0.5">{name}</td><td className="py-0.5 text-right">{sign}{kes(amount)}</td></tr>
-  );
+  const earnings: [string, number][] = [['Basic Salary', p.basic_full]];
+  if (p.unpaid_days > 0) earnings.push([`Unpaid leave (${p.unpaid_days} days)`, p.basic - p.basic_full]);
+  p.allowances.forEach((a) => earnings.push([a.name + (a.taxable ? '' : ' (non-taxable)'), a.amount]));
+  if (p.extra_earnings > 0) earnings.push(['Bonus / overtime', p.extra_earnings]);
+
+  const deductions: [string, number][] = [];
+  p.statutory.filter((s) => s.employee > 0).forEach((s) => deductions.push([s.name, s.employee]));
+  p.deductions.forEach((d) => deductions.push([d.name, d.amount]));
+  if (p.extra_deductions > 0) deductions.push(['Other deductions', p.extra_deductions]);
+  p.loans.forEach((l) => deductions.push([l.name, l.amount]));
+
   return (
-    <div id="payslip-print" className="text-xs text-gray-900">
-      <div className="text-center mb-3">
-        <div className="text-sm font-bold">PAYSLIP</div>
-        <div className="text-gray-600">{periodLabel(run)}</div>
-      </div>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 mb-3 text-[11px]">
-        <div><span className="text-gray-500">Employee:</span> {staff.name}</div>
-        <div><span className="text-gray-500">ID No:</span> {profile.id_no || '—'}</div>
-        <div><span className="text-gray-500">Role:</span> {staff.role || '—'}</div>
-        <div><span className="text-gray-500">KRA PIN:</span> {profile.kra_pin || '—'}</div>
-        <div><span className="text-gray-500">NSSF No:</span> {profile.nssf_no || '—'}</div>
-        <div><span className="text-gray-500">SHIF No:</span> {profile.shif_no || '—'}</div>
-        <div><span className="text-gray-500">Pay date:</span> {String(run.pay_date).slice(0, 10)}</div>
-      </div>
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <div className="font-semibold border-b mb-1">Earnings</div>
-          <table className="w-full"><tbody>
-            {row('Basic salary', p.basic_full)}
-            {p.unpaid_days > 0 && row(`Unpaid leave (${p.unpaid_days} days)`, p.basic - p.basic_full)}
-            {p.allowances.map((a) => row(a.name + (a.taxable ? '' : ' (non-taxable)'), a.amount))}
-            {p.extra_earnings > 0 && row('Bonus / overtime', p.extra_earnings)}
-            <tr className="border-t font-semibold"><td className="py-1">Gross pay</td><td className="py-1 text-right">{kes(p.gross_pay)}</td></tr>
-          </tbody></table>
-        </div>
-        <div>
-          <div className="font-semibold border-b mb-1">Deductions</div>
-          <table className="w-full"><tbody>
-            {p.statutory.filter((s) => s.employee > 0).map((s) => row(s.name, s.employee))}
-            {p.deductions.map((d) => row(d.name, d.amount))}
-            {p.extra_deductions > 0 && row('Other deductions', p.extra_deductions)}
-            {p.loans.map((l) => row(l.name, l.amount))}
-            <tr className="border-t font-semibold"><td className="py-1">Total deductions</td><td className="py-1 text-right">{kes(p.total_deductions)}</td></tr>
-          </tbody></table>
-        </div>
-      </div>
-      <div className="mt-3 flex justify-between items-center border-t border-b py-2 text-sm font-bold">
-        <span>NET PAY</span><span>{kes(p.net_pay)}</span>
-      </div>
-      <div className="mt-2 text-[10px] text-gray-500">
-        Taxable income {kes(p.taxable_income)}. {profile.bank_name ? `Paid to ${profile.bank_name} ${profile.bank_account || ''}.` : ''}
+    <div className="ps payslip-print">
+      <style>{PAYSLIP_CSS}</style>
+      <h2>EMPLOYEE PAYSLIP – {periodLabel(run).toUpperCase()}</h2>
+      <table>
+        <thead><tr><th style={{ width: '40%' }}>Employee Information</th><th>Details</th></tr></thead>
+        <tbody>
+          <tr><td>Employee Name</td><td>{staff.name}</td></tr>
+          <tr><td>Employee Number</td><td>{staff.employee_number || '—'}</td></tr>
+          <tr><td>Department</td><td>{staff.department || '—'}</td></tr>
+          <tr><td>Payment Period</td><td>{periodLabel(run)}</td></tr>
+        </tbody>
+      </table>
+
+      <table>
+        <thead><tr><th>Earnings</th><th className="r" style={{ width: '35%' }}>Amount</th></tr></thead>
+        <tbody>
+          {earnings.map(([n, a]) => <tr key={n}><td>{n}</td><td className="r">{amt(a)}</td></tr>)}
+          <tr className="tot"><td>Total Earnings</td><td className="r">{amt(p.gross_pay)}</td></tr>
+        </tbody>
+      </table>
+
+      <table>
+        <thead><tr><th>Deductions</th><th className="r" style={{ width: '35%' }}>Amount</th></tr></thead>
+        <tbody>
+          {deductions.length === 0 && <tr><td colSpan={2}>None</td></tr>}
+          {deductions.map(([n, a], i) => <tr key={n + i}><td>{n}</td><td className="r">{amt(a)}</td></tr>)}
+          <tr className="tot"><td>Total Deductions</td><td className="r">{amt(p.total_deductions)}</td></tr>
+        </tbody>
+      </table>
+
+      <div className="net"><span>NET PAY</span><span>KSh {amt(p.net_pay)}</span></div>
+      <div className="foot">
+        Pay date {String(run.pay_date).slice(0, 10)}. Taxable income KSh {amt(p.taxable_income)}.
+        {profile.kra_pin ? ` KRA PIN ${profile.kra_pin}.` : ''}
+        {profile.bank_name ? ` Paid to ${profile.bank_name} ${profile.bank_account || ''}.` : ''}
       </div>
     </div>
   );
+};
+
+const openPrintWindow = (bodyHtml: string): boolean => {
+  const w = window.open('', '_blank', 'width=800,height=900');
+  if (!w) return false;
+  w.document.write(`<html><head><title>Payslip</title><style>
+    body{margin:0;padding:24px}.page{page-break-after:always;padding-bottom:24px}.page:last-child{page-break-after:auto}
+  </style></head><body>${bodyHtml}</body></html>`);
+  w.document.close();
+  w.focus();
+  w.print();
+  return true;
 };
 
 const PayrollRunDetailPage: React.FC = () => {
@@ -70,7 +101,7 @@ const PayrollRunDetailPage: React.FC = () => {
 
   const [editItem, setEditItem] = useState<RunItem | null>(null);
   const [edit, setEdit] = useState({ unpaid_days: '', extra_earnings: '', extra_deductions: '' });
-  const [payslip, setPayslip] = useState<{ run: PayrollRun; staff: any; profile: any; payslip: Payslip } | null>(null);
+  const [payslip, setPayslip] = useState<PayslipData | null>(null);
   const [payOpen, setPayOpen] = useState(false);
   const [payAccounts, setPayAccounts] = useState<Account[]>([]);
   const [payAccount, setPayAccount] = useState('');
@@ -131,21 +162,18 @@ const PayrollRunDetailPage: React.FC = () => {
   };
 
   const printPayslip = () => {
-    const node = document.getElementById('payslip-print');
+    const node = document.querySelector('.payslip-print');
     if (!node) return;
-    const w = window.open('', '_blank', 'width=800,height=900');
-    if (!w) { setError('Allow pop-ups to print payslips'); return; }
-    w.document.write(`<html><head><title>Payslip</title><style>
-      body{font-family:Arial,sans-serif;padding:24px;font-size:12px;color:#111}
-      table{width:100%;border-collapse:collapse}.text-right{text-align:right}
-      .grid{display:grid}.grid-cols-2{grid-template-columns:1fr 1fr}.text-center{text-align:center}
-      .font-bold,.font-semibold{font-weight:bold}.border-t{border-top:1px solid #999}.border-b{border-bottom:1px solid #999}
-      .flex{display:flex}.justify-between{justify-content:space-between}.mb-1{margin-bottom:4px}.mb-3{margin-bottom:12px}.mt-2{margin-top:8px}.mt-3{margin-top:12px}
-      .py-1{padding:4px 0}.py-2{padding:8px 0}.gap-6{gap:24px}.gap-x-6{column-gap:24px}.text-gray-500,.text-gray-600{color:#666}.text-sm{font-size:14px}.text-\\[10px\\]{font-size:10px}
-    </style></head><body>${node.outerHTML}</body></html>`);
-    w.document.close();
-    w.focus();
-    w.print();
+    if (!openPrintWindow(`<div class="page">${node.outerHTML}</div>`)) setError('Allow pop-ups to print payslips');
+  };
+
+  const printAllPayslips = async () => {
+    setBusy(true); setError(null);
+    try {
+      const all = await Promise.all(items.map((it) => payrollApi.payslip(run.id, it.staff_id)));
+      const html = all.map((d) => `<div class="page">${renderToStaticMarkup(<PayslipView data={d} />)}</div>`).join('');
+      if (!openPrintWindow(html)) setError('Allow pop-ups to print payslips');
+    } catch (e: any) { setError(e.message); } finally { setBusy(false); }
   };
 
   const stepper = ['draft', 'approved', 'paid'];
@@ -162,6 +190,7 @@ const PayrollRunDetailPage: React.FC = () => {
             <p className="text-xs text-gray-600">Pay date {String(run.pay_date).slice(0, 10)} · {run.employee_count} employees{run.journal_entry_id ? ` · journal entry #${run.journal_entry_id}` : ''}</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button disabled={busy || items.length === 0} onClick={printAllPayslips} className="inline-flex items-center px-3 py-1.5 text-xs border border-gray-300 rounded bg-white hover:bg-gray-50"><Printer className="w-3.5 h-3.5 mr-1" /> Print all payslips</button>
             {isDraft && <button disabled={busy} onClick={() => act(() => payrollApi.recalculate(run.id), 'Recalculated with the latest salaries, rules and loans.')} className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white hover:bg-gray-50">Recalculate</button>}
             {isDraft && <button disabled={busy} onClick={() => act(() => payrollApi.approve(run.id), 'Run approved.')} className="px-3 py-1.5 text-xs text-white bg-blue-600 hover:bg-blue-700 rounded">Approve</button>}
             {run.status === 'approved' && <button disabled={busy} onClick={() => act(() => payrollApi.reopen(run.id), 'Run re-opened for editing.')} className="px-3 py-1.5 text-xs border border-gray-300 rounded bg-white hover:bg-gray-50">Re-open</button>}

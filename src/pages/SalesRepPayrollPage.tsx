@@ -3,9 +3,13 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { saveAs } from 'file-saver';
 import {
-  Wallet, Users, Filter, Download, X, Sliders, PlayCircle, History, CheckCircle2,
+  Wallet, Users, Filter, Download, X, Sliders, PlayCircle, History,
 } from 'lucide-react';
 import { salesService, SalesRep, Country } from '../services/salesService';
+import {
+  LoginHistory, Leave, Deduction, RepPayroll, getDaysInMonth, toLocalISODate, formatKES,
+  countWorkingDays, computeRepPayroll, sumApprovedExtraByRep, sumAdvanceBalanceByRep,
+} from '../utils/salesRepPayroll';
 import { API_CONFIG } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -17,101 +21,7 @@ const getAuthHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-interface LoginHistory {
-  id: number;
-  userId: number;
-  sessionStart: string;
-  sessionEnd?: string;
-}
-
-interface Leave {
-  id: number;
-  userId: number;
-  startDate: string;
-  endDate: string;
-  status: string | number;
-}
-
-interface Deduction {
-  id: number;
-  name: string;
-  code?: string | null;
-  calculation_type: 'percentage' | 'fixed';
-  rate?: number | null;
-  amount?: number | null;
-  cap_amount?: number | null;
-  account_id: number;
-  account_code?: string;
-  account_name?: string;
-  is_active: boolean | number;
-}
-
-interface DeductionLine {
-  deduction: Deduction;
-  amount: number;
-}
-
-interface Account {
-  id: number;
-  account_code: string;
-  account_name: string;
-}
-
-interface PayrollHistoryEntry {
-  id: number;
-  sales_rep_id: number;
-  sales_rep_name: string;
-  pay_date: string;
-  period_start: string;
-  period_end: string;
-  basic_salary: number;
-  working_days: number;
-  days_paid: number;
-  gross_pay: number;
-  total_deductions: number;
-  net_pay: number;
-  journal_entry_id: number | null;
-}
-
-interface RepPayroll {
-  rep: SalesRep;
-  present: number;
-  leave: number;
-  absent: number;
-  totalWorkingDays: number;
-  daysPaid: number;
-  basicSalary: number;
-  grossPay: number;
-  deductionLines: DeductionLine[];
-  totalDeductions: number;
-  netPay: number;
-}
-
-const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
-
-// Local-calendar ISO date (avoids UTC rollback near month boundaries in timezones ahead of UTC)
-const toLocalISODate = (d: Date) => {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-};
-
-const formatKES = (amount: number) =>
-  amount.toLocaleString('en-KE', { style: 'currency', currency: 'KES', minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const calculateDeductionAmount = (deduction: Deduction, grossPay: number): number => {
-  let value = 0;
-  if (deduction.calculation_type === 'percentage') {
-    value = grossPay * (Number(deduction.rate || 0) / 100);
-  } else {
-    value = Number(deduction.amount || 0);
-  }
-  if (deduction.cap_amount != null && value > Number(deduction.cap_amount)) {
-    value = Number(deduction.cap_amount);
-  }
-  return value;
-};
+type PayrollRow = RepPayroll;
 
 const SalesRepPayrollPage: React.FC = () => {
   const { user } = useAuth();
@@ -150,25 +60,13 @@ const SalesRepPayrollPage: React.FC = () => {
   const [pendingStartDate, setPendingStartDate] = useState(startDate);
   const [pendingEndDate, setPendingEndDate] = useState(endDate);
 
-  const [breakdownModal, setBreakdownModal] = useState<RepPayroll | null>(null);
+  const [breakdownModal, setBreakdownModal] = useState<PayrollRow | null>(null);
 
-  // Run Payroll state
-  const [runModalOpen, setRunModalOpen] = useState(false);
-  const [runSubmitting, setRunSubmitting] = useState(false);
-  const [runError, setRunError] = useState<string | null>(null);
-  const [runResult, setRunResult] = useState<{ count: number; skipped: number } | null>(null);
-  const [payDate, setPayDate] = useState<string>(() => toLocalISODate(new Date()));
-  const [paymentAccounts, setPaymentAccounts] = useState<Account[]>([]);
-  const [expenseAccounts, setExpenseAccounts] = useState<Account[]>([]);
-  const [selectedPaymentAccount, setSelectedPaymentAccount] = useState<string>('');
-  const [selectedExpenseAccount, setSelectedExpenseAccount] = useState<string>('');
-  const [runNotes, setRunNotes] = useState('');
-  const [runRepIds, setRunRepIds] = useState<number[]>([]);
+  // Extra deductions posted on the Sales Rep Deductions page, for the selected pay period
+  const [extraDeductions, setExtraDeductions] = useState<{ sales_rep_id: number; amount: number | string; status: string }[]>([]);
 
-  // Payroll history state
-  const [historyModalOpen, setHistoryModalOpen] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyData, setHistoryData] = useState<PayrollHistoryEntry[]>([]);
+  // Approved salary advances that still have a balance to recover (dated up to the period end)
+  const [advances, setAdvances] = useState<{ sales_rep_id: number; amount: number | string; recovered_amount: number | string; status: string }[]>([]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [repsPerPage, setRepsPerPage] = useState(10);
@@ -198,26 +96,29 @@ const SalesRepPayrollPage: React.FC = () => {
       });
   }, []);
 
-  // Fetch accounts used when running payroll: cash/bank (type 9) and expense (type 16)
   useEffect(() => {
-    axios.get(`${PAYROLL_API_BASE}/payment-accounts`, { headers: getAuthHeaders() })
-      .then(res => {
-        if (res.data?.success) {
-          setPaymentAccounts(res.data.data || []);
-          if (res.data.data?.length > 0) setSelectedPaymentAccount(String(res.data.data[0].id));
-        }
+    let cancelled = false;
+    axios
+      .get(`${PAYROLL_API_BASE}/sales-rep-deductions`, {
+        headers: getAuthHeaders(),
+        params: { start_date: startDate, end_date: endDate },
       })
-      .catch(() => setPaymentAccounts([]));
+      .then(res => { if (!cancelled) setExtraDeductions(res.data?.success ? res.data.data || [] : []); })
+      .catch(() => { if (!cancelled) setExtraDeductions([]); });
+    return () => { cancelled = true; };
+  }, [startDate, endDate]);
 
-    axios.get(API_CONFIG.getUrl('/financial/accounts/type16'), { headers: getAuthHeaders() })
-      .then(res => {
-        if (res.data?.success) {
-          setExpenseAccounts(res.data.data || []);
-          if (res.data.data?.length > 0) setSelectedExpenseAccount(String(res.data.data[0].id));
-        }
+  useEffect(() => {
+    let cancelled = false;
+    axios
+      .get(`${PAYROLL_API_BASE}/sales-rep-advances`, {
+        headers: getAuthHeaders(),
+        params: { outstanding: 1, end_date: endDate },
       })
-      .catch(() => setExpenseAccounts([]));
-  }, []);
+      .then(res => { if (!cancelled) setAdvances(res.data?.success ? res.data.data || [] : []); })
+      .catch(() => { if (!cancelled) setAdvances([]); });
+    return () => { cancelled = true; };
+  }, [endDate]);
 
   // Default country filter to the user's own country
   useEffect(() => {
@@ -286,20 +187,7 @@ const SalesRepPayrollPage: React.FC = () => {
     return () => { cancelled = true; };
   }, [isTeamLeaderUser, teamLeaderUserId, salesReps]);
 
-  // Every calendar day in range (up to today) counts as a working day, matching the Working Days report
-  const getWorkingDaysInRange = () => {
-    const days: string[] = [];
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      if (d <= today) days.push(d.toISOString().slice(0, 10));
-    }
-    return days;
-  };
-
-  const numWorkingDays = getWorkingDaysInRange().length;
+  const numWorkingDays = countWorkingDays(startDate, endDate);
   const rangeStart = new Date(startDate);
   const rangeEnd = new Date(endDate);
 
@@ -317,54 +205,17 @@ const SalesRepPayrollPage: React.FC = () => {
 
   const activeDeductions = useMemo(() => deductions.filter(d => !!d.is_active), [deductions]);
 
-  const payrollRows: RepPayroll[] = useMemo(() => {
-    return filteredSalesReps.map(rep => {
-      const presentDays = new Set(
-        loginHistory
-          .filter(lh => lh.userId === rep.id && lh.sessionStart &&
-            new Date(lh.sessionStart) >= rangeStart && new Date(lh.sessionStart) <= rangeEnd)
-          .map(lh => lh.sessionStart.slice(0, 10))
-      );
+  // Only approved extra deductions count (pending and rejected are ignored)
+  const extraByRep = useMemo(() => sumApprovedExtraByRep(extraDeductions), [extraDeductions]);
+  const advanceByRep = useMemo(() => sumAdvanceBalanceByRep(advances), [advances]);
 
-      const repLeaves = leaves.filter(lv => String(lv.userId) === String(rep.id) && (lv.status === 1 || lv.status === '1'));
-      let leaveDays = 0;
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-      repLeaves.forEach(lv => {
-        const leaveStart = new Date(lv.startDate) < rangeStart ? rangeStart : new Date(lv.startDate);
-        const leaveEnd = new Date(lv.endDate) > rangeEnd ? rangeEnd : new Date(lv.endDate);
-        for (let d = new Date(leaveStart); d <= leaveEnd; d.setDate(d.getDate() + 1)) {
-          if (d >= rangeStart && d <= rangeEnd && d <= today) leaveDays++;
-        }
-      });
-
-      const absentDays = numWorkingDays - presentDays.size - leaveDays;
-      const daysPaid = presentDays.size + leaveDays;
-      const basicSalary = rep.basic_salary != null ? Number(rep.basic_salary) : 0;
-      const grossPay = numWorkingDays > 0 ? basicSalary * (daysPaid / numWorkingDays) : basicSalary;
-
-      const deductionLines: DeductionLine[] = activeDeductions.map(d => ({
-        deduction: d,
-        amount: calculateDeductionAmount(d, grossPay),
-      }));
-      const totalDeductions = deductionLines.reduce((sum, l) => sum + l.amount, 0);
-      const netPay = grossPay - totalDeductions;
-
-      return {
-        rep,
-        present: presentDays.size,
-        leave: leaveDays,
-        absent: absentDays < 0 ? 0 : absentDays,
-        totalWorkingDays: numWorkingDays,
-        daysPaid,
-        basicSalary,
-        grossPay,
-        deductionLines,
-        totalDeductions,
-        netPay,
-      };
-    });
-  }, [filteredSalesReps, loginHistory, leaves, activeDeductions, numWorkingDays, rangeStart, rangeEnd]);
+  const payrollRows: PayrollRow[] = useMemo(
+    () => filteredSalesReps.map(rep =>
+      computeRepPayroll(rep, { loginHistory, leaves, activeDeductions, numWorkingDays, rangeStart, rangeEnd, extraDeduction: extraByRep.get(rep.id) || 0, advanceBalance: advanceByRep.get(rep.id) || 0 })
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredSalesReps, loginHistory, leaves, activeDeductions, numWorkingDays, startDate, endDate, extraByRep, advanceByRep]
+  );
 
   const totalPages = Math.ceil(payrollRows.length / repsPerPage);
   const paginatedRows = useMemo(() => {
@@ -383,14 +234,14 @@ const SalesRepPayrollPage: React.FC = () => {
     reps: payrollRows.length,
     basicSalary: payrollRows.reduce((s, r) => s + r.basicSalary, 0),
     gross: payrollRows.reduce((s, r) => s + r.grossPay, 0),
-    deductions: payrollRows.reduce((s, r) => s + r.totalDeductions, 0),
+    deductions: payrollRows.reduce((s, r) => s + r.totalDeductions + r.extraDeduction + r.advanceRecovery, 0),
     net: payrollRows.reduce((s, r) => s + r.netPay, 0),
   }), [payrollRows]);
 
   const exportToCSV = () => {
     const headers = [
       'Sales Rep', 'Role', 'Basic Salary', 'Days Paid', 'Working Days', 'Gross Pay',
-      ...activeDeductions.map(d => d.name), 'Total Deductions', 'Net Pay',
+      ...activeDeductions.map(d => d.name), 'Total Deductions', 'Extra Deductions', 'Advance Recovery', 'Net Pay',
     ];
     const rows = payrollRows.map(r => [
       r.rep.name,
@@ -404,6 +255,8 @@ const SalesRepPayrollPage: React.FC = () => {
         return line ? line.amount.toFixed(2) : '0.00';
       }),
       r.totalDeductions.toFixed(2),
+      r.extraDeduction.toFixed(2),
+      r.advanceRecovery.toFixed(2),
       r.netPay.toFixed(2),
     ]);
     const csvContent = [
@@ -446,75 +299,6 @@ const SalesRepPayrollPage: React.FC = () => {
     setPendingEndDate(toLocalISODate(new Date(year, month, daysInMonth)));
   };
 
-  const openRunModal = () => {
-    setRunError(null);
-    setRunResult(null);
-    setRunNotes('');
-    setPayDate(toLocalISODate(new Date()));
-    // Default to every sales rep currently shown under the active filters
-    setRunRepIds(payrollRows.map(r => r.rep.id));
-    setRunModalOpen(true);
-  };
-
-  const closeRunModal = () => {
-    setRunModalOpen(false);
-    setRunError(null);
-  };
-
-  const toggleRunRep = (repId: number) => {
-    setRunRepIds(ids => ids.includes(repId) ? ids.filter(id => id !== repId) : [...ids, repId]);
-  };
-
-  const handleRunPayroll = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedPaymentAccount || !selectedExpenseAccount) {
-      setRunError('Payment account and expense account are required');
-      return;
-    }
-    if (runRepIds.length === 0) {
-      setRunError('Select at least one sales rep to run payroll for');
-      return;
-    }
-    setRunSubmitting(true);
-    setRunError(null);
-    setRunResult(null);
-    try {
-      const res = await axios.post(
-        `${PAYROLL_API_BASE}/run-sales-reps`,
-        {
-          pay_date: payDate,
-          period_start: startDate,
-          period_end: endDate,
-          sales_rep_ids: runRepIds,
-          payment_account_id: Number(selectedPaymentAccount),
-          expense_account_id: Number(selectedExpenseAccount),
-          notes: runNotes || undefined,
-        },
-        { headers: getAuthHeaders() }
-      );
-      if (res.data?.success) {
-        setRunResult({ count: res.data.count, skipped: res.data.skipped || 0 });
-      } else {
-        setRunError(res.data?.error || 'Failed to run payroll');
-      }
-    } catch (err: any) {
-      setRunError(err.response?.data?.error || err.message || 'Failed to run payroll');
-    }
-    setRunSubmitting(false);
-  };
-
-  const openHistoryModal = async () => {
-    setHistoryModalOpen(true);
-    setHistoryLoading(true);
-    try {
-      const res = await axios.get(`${PAYROLL_API_BASE}/sales-reps-history`, { headers: getAuthHeaders() });
-      setHistoryData(res.data?.success ? (res.data.data || []) : []);
-    } catch {
-      setHistoryData([]);
-    }
-    setHistoryLoading(false);
-  };
-
   const formatDate = (dateString: string) =>
     new Date(dateString).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
 
@@ -542,13 +326,13 @@ const SalesRepPayrollPage: React.FC = () => {
               <Sliders className="h-3 w-3 mr-1.5" />
               Manage Deductions
             </Link>
-            <button
-              onClick={openHistoryModal}
+            <Link
+              to="/sales-rep-payroll/history"
               className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
             >
               <History className="h-3 w-3 mr-1.5" />
               Payroll History
-            </button>
+            </Link>
             <button
               onClick={exportToCSV}
               className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
@@ -563,13 +347,25 @@ const SalesRepPayrollPage: React.FC = () => {
               <Filter className="h-3 w-3 mr-1.5" />
               Filter
             </button>
-            <button
-              onClick={openRunModal}
+            <Link
+              to="/sales-rep-deductions"
+              className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+            >
+              Post Deduction
+            </Link>
+            <Link
+              to="/sales-rep-advances"
+              className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
+            >
+              Salary Advances
+            </Link>
+            <Link
+              to={`/sales-rep-payroll/run?${new URLSearchParams({ start: startDate, end: endDate, country: selectedCountry, status: selectedStatus, rep: selectedRep }).toString()}`}
               className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors"
             >
               <PlayCircle className="h-3 w-3 mr-1.5" />
               Run Payroll
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -692,6 +488,8 @@ const SalesRepPayrollPage: React.FC = () => {
                           <th className="px-3 py-2 text-center text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Days Paid</th>
                           <th className="px-3 py-2 text-right text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Gross Pay</th>
                           <th className="px-3 py-2 text-right text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Deductions</th>
+                          <th className="px-3 py-2 text-right text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Extra Deductions</th>
+                          <th className="px-3 py-2 text-right text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Advance Recovery</th>
                           <th className="px-3 py-2 text-right text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Net Pay</th>
                         </tr>
                       </thead>
@@ -720,6 +518,21 @@ const SalesRepPayrollPage: React.FC = () => {
                               >
                                 {formatKES(row.totalDeductions)}
                               </button>
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-right text-xs font-semibold">
+                              {row.extraDeduction > 0
+                                ? <span className="text-red-600">{formatKES(row.extraDeduction)}</span>
+                                : <span className="text-gray-400">{formatKES(0)}</span>}
+                            </td>
+                            <td className="px-3 py-2 whitespace-nowrap text-right text-xs font-semibold">
+                              {row.advanceRecovery > 0
+                                ? <span className="text-red-600">{formatKES(row.advanceRecovery)}</span>
+                                : <span className="text-gray-400">{formatKES(0)}</span>}
+                              {row.advanceBalance - row.advanceRecovery > 0.005 && (
+                                <div className="text-[9px] font-normal text-amber-600" title="Approved advance still to be recovered; carried to the next payroll">
+                                  {formatKES(row.advanceBalance - row.advanceRecovery)} carried forward
+                                </div>
+                              )}
                             </td>
                             <td className="px-3 py-2 whitespace-nowrap text-right text-xs font-bold text-green-600">
                               {formatKES(row.netPay)}
@@ -828,8 +641,20 @@ const SalesRepPayrollPage: React.FC = () => {
                 </tbody>
                 <tfoot className="bg-gray-50">
                   <tr>
+                    <td className="px-5 py-2.5 text-xs font-semibold text-gray-900" colSpan={2}>Extra Deductions</td>
+                    <td className="px-5 py-2.5 text-right text-xs font-bold text-red-600">{formatKES(breakdownModal.extraDeduction)}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-5 py-2.5 text-xs font-semibold text-gray-900" colSpan={2}>Salary Advance Recovery</td>
+                    <td className="px-5 py-2.5 text-right text-xs font-bold text-red-600">{formatKES(breakdownModal.advanceRecovery)}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-5 py-2 text-xs text-gray-500" colSpan={2}>Advance balance carried forward</td>
+                    <td className="px-5 py-2 text-right text-xs text-amber-600">{formatKES(Math.max(0, breakdownModal.advanceBalance - breakdownModal.advanceRecovery))}</td>
+                  </tr>
+                  <tr>
                     <td className="px-5 py-2.5 text-xs font-semibold text-gray-900" colSpan={2}>Total Deductions</td>
-                    <td className="px-5 py-2.5 text-right text-xs font-bold text-red-600">{formatKES(breakdownModal.totalDeductions)}</td>
+                    <td className="px-5 py-2.5 text-right text-xs font-bold text-red-600">{formatKES(breakdownModal.totalDeductions + breakdownModal.extraDeduction + breakdownModal.advanceRecovery)}</td>
                   </tr>
                   <tr>
                     <td className="px-5 py-2.5 text-xs font-semibold text-gray-900" colSpan={2}>Gross Pay</td>
@@ -958,228 +783,6 @@ const SalesRepPayrollPage: React.FC = () => {
                 onClick={applyFilters}
               >
                 Apply Filters
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Run Payroll Modal */}
-      {runModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col" style={{ maxHeight: '90vh' }}>
-            <div className="flex items-center justify-between px-5 py-3.5 bg-green-600 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <PlayCircle className="h-4 w-4 text-white" />
-                <div>
-                  <h2 className="text-sm font-bold text-white">Run Sales Rep Payroll</h2>
-                  <p className="text-[10px] text-green-100">
-                    Period: {startDate} to {endDate}
-                  </p>
-                </div>
-              </div>
-              <button onClick={closeRunModal} className="text-white hover:text-green-200 transition-colors">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="p-4 overflow-y-auto flex-1">
-              {runResult ? (
-                <div className="text-center py-8">
-                  <CheckCircle2 className="h-10 w-10 text-green-600 mx-auto mb-3" />
-                  <h3 className="text-sm font-semibold text-gray-900 mb-1">Payroll Posted</h3>
-                  <p className="text-xs text-gray-600">
-                    {runResult.count} journal {runResult.count === 1 ? 'entry' : 'entries'} recorded to journal_entries / journal_entry_lines.
-                    {runResult.skipped > 0 && ` ${runResult.skipped} rep(s) skipped (already paid for this date).`}
-                  </p>
-                  <div className="flex justify-center gap-2 mt-4">
-                    <button
-                      onClick={() => { closeRunModal(); openHistoryModal(); }}
-                      className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200"
-                    >
-                      View History
-                    </button>
-                    <button
-                      onClick={closeRunModal}
-                      className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded"
-                    >
-                      Done
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <form onSubmit={handleRunPayroll} className="space-y-3">
-                  {runError && (
-                    <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                      {runError}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-medium text-gray-700 mb-1">Pay Date</label>
-                      <input
-                        type="date"
-                        value={payDate}
-                        onChange={e => setPayDate(e.target.value)}
-                        className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-medium text-gray-700 mb-1">Payment Account (cash/bank)</label>
-                      <select
-                        value={selectedPaymentAccount}
-                        onChange={e => setSelectedPaymentAccount(e.target.value)}
-                        className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                        required
-                      >
-                        <option value="">Select account</option>
-                        {paymentAccounts.map(a => (
-                          <option key={a.id} value={a.id}>{a.account_code} - {a.account_name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-medium text-gray-700 mb-1">Payroll Expense Account</label>
-                    <select
-                      value={selectedExpenseAccount}
-                      onChange={e => setSelectedExpenseAccount(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                      required
-                    >
-                      <option value="">Select account</option>
-                      {expenseAccounts.map(a => (
-                        <option key={a.id} value={a.id}>{a.account_code} - {a.account_name}</option>
-                      ))}
-                    </select>
-                    <p className="mt-1 text-[10px] text-gray-500">Debited for the total gross pay of this run</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-medium text-gray-700 mb-2">
-                      Sales Reps ({runRepIds.length} of {payrollRows.length} selected)
-                    </label>
-                    <div className="bg-gray-50 border border-gray-300 rounded-lg p-2.5 max-h-48 overflow-y-auto">
-                      <label className="flex items-center gap-2 p-1 text-[11px] font-medium text-gray-700 border-b border-gray-200 mb-1 pb-1.5">
-                        <input
-                          type="checkbox"
-                          checked={runRepIds.length === payrollRows.length && payrollRows.length > 0}
-                          onChange={e => setRunRepIds(e.target.checked ? payrollRows.map(r => r.rep.id) : [])}
-                          className="w-3 h-3 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                        />
-                        Select All
-                      </label>
-                      {payrollRows.map(row => (
-                        <label key={row.rep.id} className="flex items-center gap-2 p-1 hover:bg-white rounded cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={runRepIds.includes(row.rep.id)}
-                            onChange={() => toggleRunRep(row.rep.id)}
-                            className="w-3 h-3 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                          />
-                          <span className="flex-1 text-[11px] text-gray-900">{row.rep.name}</span>
-                          <span className="text-[10px] text-gray-500">Net {formatKES(row.netPay)}</span>
-                        </label>
-                      ))}
-                      {payrollRows.length === 0 && (
-                        <p className="text-[10px] text-gray-500 text-center py-2">No sales reps match the current filters.</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-medium text-gray-700 mb-1">Notes (optional)</label>
-                    <textarea
-                      value={runNotes}
-                      onChange={e => setRunNotes(e.target.value)}
-                      rows={2}
-                      className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500 resize-none"
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2 border-t border-gray-200">
-                    <button
-                      type="button"
-                      onClick={closeRunModal}
-                      className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={runSubmitting}
-                      className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded disabled:opacity-50"
-                    >
-                      {runSubmitting ? 'Processing...' : 'Run Payroll'}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Payroll History Modal */}
-      {historyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col" style={{ maxHeight: '85vh' }}>
-            <div className="flex items-center justify-between px-5 py-3.5 bg-red-600 flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <History className="h-4 w-4 text-white" />
-                <h2 className="text-sm font-bold text-white">Sales Rep Payroll History</h2>
-              </div>
-              <button onClick={() => setHistoryModalOpen(false)} className="text-white hover:text-red-200 transition-colors">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1">
-              {historyLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-red-600 border-t-transparent"></div>
-                </div>
-              ) : historyData.length === 0 ? (
-                <div className="text-center py-12 text-xs text-gray-500">No payroll runs recorded yet.</div>
-              ) : (
-                <table className="min-w-full divide-y divide-gray-100">
-                  <thead className="bg-gray-50 sticky top-0">
-                    <tr>
-                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Sales Rep</th>
-                      <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Pay Date</th>
-                      <th className="px-4 py-2.5 text-center text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Days Paid</th>
-                      <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Gross Pay</th>
-                      <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Deductions</th>
-                      <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Net Pay</th>
-                      <th className="px-4 py-2.5 text-center text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Journal Entry</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {historyData.map(h => (
-                      <tr key={h.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-2.5 text-xs font-medium text-gray-900 whitespace-nowrap">{h.sales_rep_name}</td>
-                        <td className="px-4 py-2.5 text-xs text-gray-600 whitespace-nowrap">{new Date(h.pay_date).toLocaleDateString()}</td>
-                        <td className="px-4 py-2.5 text-xs text-gray-600 text-center whitespace-nowrap">{h.days_paid}/{h.working_days}</td>
-                        <td className="px-4 py-2.5 text-xs text-gray-900 text-right whitespace-nowrap">{formatKES(Number(h.gross_pay))}</td>
-                        <td className="px-4 py-2.5 text-xs text-red-600 text-right whitespace-nowrap">{formatKES(Number(h.total_deductions))}</td>
-                        <td className="px-4 py-2.5 text-xs font-bold text-green-600 text-right whitespace-nowrap">{formatKES(Number(h.net_pay))}</td>
-                        <td className="px-4 py-2.5 text-xs text-gray-500 text-center whitespace-nowrap">
-                          {h.journal_entry_id ? `#${h.journal_entry_id}` : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-            <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex justify-end flex-shrink-0">
-              <button
-                onClick={() => setHistoryModalOpen(false)}
-                className="px-4 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
-              >
-                Close
               </button>
             </div>
           </div>

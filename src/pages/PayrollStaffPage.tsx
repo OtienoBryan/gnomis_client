@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Search, Pencil, X, Trash2 } from 'lucide-react';
 import { payrollApi, kes, StaffPayrollRow, StaffItem, Loan, StatutoryRule } from '../services/payrollService';
 
-const input = 'w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-red-500';
-const label = 'block text-[10px] font-medium text-gray-700 mb-1';
+const input = 'w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-red-500';
+const label = 'block text-xs font-medium text-gray-700 mb-1';
 
 const PayrollStaffPage: React.FC = () => {
   const [rows, setRows] = useState<StaffPayrollRow[]>([]);
@@ -106,28 +106,28 @@ const PayrollStaffPage: React.FC = () => {
     setProfile((p) => ({ ...p, exempt_codes: p.exempt_codes.includes(code) ? p.exempt_codes.filter((c) => c !== code) : [...p.exempt_codes, code] }));
 
   return (
-    <div className="min-h-screen bg-gray-50 py-4 px-4">
-      <div className="max-w-6xl mx-auto space-y-3">
+    <div className="min-h-screen bg-gray-50 py-5 px-4 sm:px-6">
+      <div className="w-full space-y-3">
         <div>
-          <Link to="/payroll-management" className="inline-flex items-center text-[10px] text-gray-500 hover:text-gray-700 mb-1.5">
+          <Link to="/payroll-management" className="inline-flex items-center text-xs text-gray-500 hover:text-gray-700 mb-1.5">
             <ArrowLeft className="w-3 h-3 mr-1" /> Back to Payroll
           </Link>
-          <h1 className="text-sm font-bold text-gray-900">Staff Payroll Setup</h1>
-          <p className="text-xs text-gray-600">Salaries, statutory numbers, bank details, recurring allowances/deductions, exemptions and staff loans.</p>
+          <h1 className="text-lg font-bold text-gray-900">Staff Payroll Setup</h1>
+          <p className="text-sm text-gray-600">Salaries, statutory numbers, bank details, recurring allowances/deductions, exemptions and staff loans.</p>
         </div>
 
-        {error && <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2.5">{error}</div>}
+        {error && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2.5">{error}</div>}
 
         <div className="bg-white rounded-lg shadow-sm p-3">
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 w-3 h-3" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search staff…" className="w-full pl-7 pr-3 py-1.5 text-xs border border-gray-300 rounded" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search staff…" className="w-full pl-7 pr-3 py-1.5 text-sm border border-gray-300 rounded" />
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
-          <table className="min-w-full text-xs">
-            <thead className="bg-gray-50 text-[9px] uppercase tracking-wider text-gray-500">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 text-[11px] uppercase tracking-wider text-gray-500">
               <tr>
                 {['Name', 'Role', 'Basic salary', 'Allowances', 'Deductions', 'Loan balance', 'KRA PIN', 'Bank', 'Payroll', ''].map((h) => <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>)}
               </tr>
@@ -156,12 +156,12 @@ const PayrollStaffPage: React.FC = () => {
 
       {selected && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto z-50">
-          <div className="relative top-6 mx-auto p-4 w-11/12 max-w-3xl bg-white rounded-md shadow-lg mb-8 space-y-4">
+          <div className="relative top-6 mx-auto p-4 w-11/12 max-w-4xl bg-white rounded-md shadow-lg mb-8 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-gray-900">{selected.name} — payroll setup</h3>
+              <h3 className="text-sm font-semibold text-gray-900">{selected.name} — payroll setup</h3>
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
             </div>
-            {modalError && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{modalError}</div>}
+            {modalError && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{modalError}</div>}
 
             <section className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <div><label className={label}>Basic salary (KES / month)</label><input type="number" min="0" step="0.01" className={input} value={profile.basic_salary} onChange={(e) => setProfile({ ...profile, basic_salary: e.target.value })} /></div>
@@ -174,23 +174,23 @@ const PayrollStaffPage: React.FC = () => {
             </section>
 
             <section>
-              <div className="text-[10px] font-medium text-gray-700 mb-1">Exempt from (tick to skip for this employee)</div>
+              <div className="text-xs font-medium text-gray-700 mb-1">Exempt from (tick to skip for this employee)</div>
               <div className="flex flex-wrap gap-3">
                 {rules.map((r) => (
-                  <label key={r.id} className="flex items-center gap-1.5 text-xs text-gray-700">
+                  <label key={r.id} className="flex items-center gap-1.5 text-sm text-gray-700">
                     <input type="checkbox" checked={profile.exempt_codes.includes(r.code)} onChange={() => toggleExempt(r.code)} /> {r.code}
                   </label>
                 ))}
               </div>
-              <label className="flex items-center gap-1.5 text-xs text-gray-700 mt-2">
+              <label className="flex items-center gap-1.5 text-sm text-gray-700 mt-2">
                 <input type="checkbox" checked={profile.is_payroll_active} onChange={(e) => setProfile({ ...profile, is_payroll_active: e.target.checked })} /> Include in payroll runs
               </label>
             </section>
 
             <section className="border-t pt-3">
-              <h4 className="text-xs font-semibold text-gray-900 mb-2">Recurring allowances &amp; deductions</h4>
-              {items.length === 0 ? <p className="text-xs text-gray-500 mb-2">None yet.</p> : (
-                <table className="w-full text-xs mb-2">
+              <h4 className="text-sm font-semibold text-gray-900 mb-2">Recurring allowances &amp; deductions</h4>
+              {items.length === 0 ? <p className="text-sm text-gray-500 mb-2">None yet.</p> : (
+                <table className="w-full text-sm mb-2">
                   <tbody>
                     {items.map((i) => (
                       <tr key={i.id} className="border-b last:border-0">
@@ -210,27 +210,27 @@ const PayrollStaffPage: React.FC = () => {
                 <input className={input} placeholder="Name (e.g. House allowance)" value={newItem.name} onChange={(e) => setNewItem({ ...newItem, name: e.target.value })} />
                 <input className={input} type="number" min="0" step="0.01" placeholder="Amount" value={newItem.amount} onChange={(e) => setNewItem({ ...newItem, amount: e.target.value })} />
                 {newItem.item_type === 'allowance'
-                  ? <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={newItem.is_taxable} onChange={(e) => setNewItem({ ...newItem, is_taxable: e.target.checked })} /> Taxable</label>
+                  ? <label className="flex items-center gap-1.5 text-sm"><input type="checkbox" checked={newItem.is_taxable} onChange={(e) => setNewItem({ ...newItem, is_taxable: e.target.checked })} /> Taxable</label>
                   : <span />}
-                <button onClick={addItem} className="px-2.5 py-1.5 text-xs bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">Add</button>
+                <button onClick={addItem} className="px-2.5 py-1.5 text-sm bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">Add</button>
               </div>
             </section>
 
             <section className="border-t pt-3">
-              <h4 className="text-xs font-semibold text-gray-900 mb-2">Loans &amp; salary advances</h4>
+              <h4 className="text-sm font-semibold text-gray-900 mb-2">Loans &amp; salary advances</h4>
               {loans.length > 0 && (
-                <table className="w-full text-xs mb-2">
-                  <thead className="text-[9px] uppercase text-gray-500"><tr><th className="text-left">Type</th><th className="text-right">Principal</th><th className="text-right">Instalment</th><th className="text-right">Balance</th><th className="text-right">Status</th></tr></thead>
+                <table className="w-full text-sm mb-2">
+                  <thead className="text-[11px] uppercase text-gray-500"><tr><th className="text-left">Type</th><th className="text-right">Principal</th><th className="text-right">Instalment</th><th className="text-right">Balance</th><th className="text-right">Status</th></tr></thead>
                   <tbody>
                     {loans.map((l) => (
                       <tr key={l.id} className="border-b last:border-0">
-                        <td className="py-1">{l.loan_type}<div className="text-[10px] text-gray-500">from {String(l.start_date).slice(0, 10)}</div></td>
+                        <td className="py-1">{l.loan_type}<div className="text-xs text-gray-500">from {String(l.start_date).slice(0, 10)}</div></td>
                         <td className="py-1 text-right">{kes(l.principal)}</td>
                         <td className="py-1 text-right">{kes(l.monthly_installment)}</td>
                         <td className="py-1 text-right">{kes(l.balance)}</td>
                         <td className="py-1 text-right">
                           {l.status === 'active'
-                            ? <button onClick={() => setLoanStatus(l, 'cancelled')} className="text-[10px] text-red-600 hover:underline">Stop deducting</button>
+                            ? <button onClick={() => setLoanStatus(l, 'cancelled')} className="text-xs text-red-600 hover:underline">Stop deducting</button>
                             : <span className="text-gray-500">{l.status}</span>}
                         </td>
                       </tr>
@@ -243,14 +243,14 @@ const PayrollStaffPage: React.FC = () => {
                 <input className={input} type="number" min="0" placeholder="Principal" value={newLoan.principal} onChange={(e) => setNewLoan({ ...newLoan, principal: e.target.value })} />
                 <input className={input} type="number" min="0" placeholder="Monthly instalment" value={newLoan.monthly_installment} onChange={(e) => setNewLoan({ ...newLoan, monthly_installment: e.target.value })} />
                 <input className={input} type="date" value={newLoan.start_date} onChange={(e) => setNewLoan({ ...newLoan, start_date: e.target.value })} />
-                <button onClick={addLoan} className="px-2.5 py-1.5 text-xs bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">Add loan</button>
+                <button onClick={addLoan} className="px-2.5 py-1.5 text-sm bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">Add loan</button>
               </div>
-              <p className="text-[10px] text-gray-500 mt-1">Instalments are deducted automatically each run until the balance is cleared. Disbursing the loan itself is recorded separately in your books.</p>
+              <p className="text-xs text-gray-500 mt-1">Instalments are deducted automatically each run until the balance is cleared. Disbursing the loan itself is recorded separately in your books.</p>
             </section>
 
             <div className="flex justify-end gap-2 pt-2 border-t">
-              <button onClick={() => setSelected(null)} className="px-3 py-1.5 text-xs text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">Close</button>
-              <button onClick={saveProfile} disabled={saving} className="px-3 py-1.5 text-xs text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50">{saving ? 'Saving…' : 'Save profile'}</button>
+              <button onClick={() => setSelected(null)} className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">Close</button>
+              <button onClick={saveProfile} disabled={saving} className="px-3 py-1.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50">{saving ? 'Saving…' : 'Save profile'}</button>
             </div>
           </div>
         </div>

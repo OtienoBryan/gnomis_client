@@ -37,7 +37,11 @@ const toForm = (r: StatutoryRule): RuleForm => ({
   bands: r.bands && r.bands.length ? r.bands.map((b) => ({ upto: str(b.upto), rate: str(b.rate) })) : [{ upto: '', rate: '' }],
 });
 
-const describe = (r: StatutoryRule) => {
+// Share of gross pay, e.g. "6.00%"
+const pct = (part: number, gross: number) =>
+  gross > 0 ? `${((Number(part) / Number(gross)) * 100).toFixed(2)}%` : '—';
+
+const describe =(r: StatutoryRule) => {
   if (r.method === 'bands') return `${r.bands.length} tax bands, relief ${kes(r.relief_amount)}`;
   if (r.method === 'flat') return `Flat: employee ${kes(r.employee_amount)} / employer ${kes(r.employer_amount)}`;
   const parts = [`Employee ${Number(r.employee_rate || 0)}%`, `Employer ${Number(r.employer_rate || 0)}%`, `of ${r.base}`];
@@ -226,13 +230,20 @@ const PayrollStatutoryPage: React.FC = () => {
             <button onClick={runCalc} className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">Calculate</button>
             {calcResult && (
               <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-[10px] text-gray-400 uppercase">
+                    <th className="text-left font-medium pb-1">Item</th>
+                    <th className="text-right font-medium pb-1">% of gross</th>
+                    <th className="text-right font-medium pb-1">Amount</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  <tr><td className="py-0.5 text-gray-600">Gross pay</td><td className="text-right">{kes(calcResult.gross_pay)}</td></tr>
+                  <tr><td className="py-0.5 text-gray-600">Gross pay</td><td className="text-right text-gray-500">100%</td><td className="text-right">{kes(calcResult.gross_pay)}</td></tr>
                   {calcResult.statutory.filter((s) => s.employee > 0).map((s) => (
-                    <tr key={s.code}><td className="py-0.5 text-gray-600">{s.name}</td><td className="text-right text-red-600">- {kes(s.employee)}</td></tr>
+                    <tr key={s.code}><td className="py-0.5 text-gray-600">{s.name}</td><td className="text-right text-gray-500">{pct(s.employee, calcResult.gross_pay)}</td><td className="text-right text-red-600">- {kes(s.employee)}</td></tr>
                   ))}
-                  <tr className="border-t font-semibold"><td className="py-1">Net pay</td><td className="text-right text-green-700">{kes(calcResult.net_pay)}</td></tr>
-                  <tr><td className="py-0.5 text-gray-500">Employer contributions</td><td className="text-right text-gray-500">{kes(calcResult.statutory_employer)}</td></tr>
+                  <tr className="border-t font-semibold"><td className="py-1">Net pay</td><td className="text-right text-gray-500 font-normal">{pct(calcResult.net_pay, calcResult.gross_pay)}</td><td className="text-right text-green-700">{kes(calcResult.net_pay)}</td></tr>
+                  <tr><td className="py-0.5 text-gray-500">Employer contributions</td><td className="text-right text-gray-500">{pct(calcResult.statutory_employer, calcResult.gross_pay)}</td><td className="text-right text-gray-500">{kes(calcResult.statutory_employer)}</td></tr>
                 </tbody>
               </table>
             )}

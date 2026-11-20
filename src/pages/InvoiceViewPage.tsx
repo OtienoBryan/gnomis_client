@@ -328,7 +328,7 @@ const InvoiceViewPage: React.FC = () => {
         }
 
         .company-name {
-          font-size: 14px;
+          font-size: 17px;
           font-weight: bold;
           color: #1f2937;
           margin-bottom: 4px;
@@ -337,25 +337,25 @@ const InvoiceViewPage: React.FC = () => {
         .company-address, .company-tax {
           color: #6b7280;
           margin-bottom: 2px;
-          font-size: 10px;
+          font-size: 12px;
         }
 
         .customer-name {
           font-weight: bold;
           color: #1f2937;
           margin-bottom: 2px;
-          font-size: 11px;
+          font-size: 13px;
         }
 
         .customer-address {
           color: #6b7280;
           margin-bottom: 2px;
-          font-size: 10px;
+          font-size: 12px;
         }
 
         .customer-tax {
           color: #6b7280;
-          font-size: 10px;
+          font-size: 12px;
         }
 
         .invoice-title-section {
@@ -363,7 +363,7 @@ const InvoiceViewPage: React.FC = () => {
         }
 
         .invoice-title {
-          font-size: 20px;
+          font-size: 24px;
           font-weight: bold;
           color: #1f2937;
           margin-bottom: 10px;
@@ -375,14 +375,14 @@ const InvoiceViewPage: React.FC = () => {
         }
 
         .meta-label {
-          font-size: 10px;
+          font-size: 12px;
           font-weight: bold;
           color: #374151;
           margin-bottom: 2px;
         }
 
         .meta-value {
-          font-size: 10px;
+          font-size: 12px;
           color: #6b7280;
         }
 
@@ -395,18 +395,18 @@ const InvoiceViewPage: React.FC = () => {
         .invoice-table th {
           background: #f9fafb;
           border: 1px solid #e5e7eb;
-          padding: 6px 6px;
+          padding: 7px 7px;
           text-align: left;
           font-weight: bold;
           color: #374151;
-          font-size: 9px;
+          font-size: 11px;
         }
 
         .invoice-table td {
           border: 1px solid #e5e7eb;
-          padding: 6px 6px;
+          padding: 7px 7px;
           color: #374151;
-          font-size: 9px;
+          font-size: 11px;
         }
 
         .desc-col { width: 26%; }
@@ -422,7 +422,7 @@ const InvoiceViewPage: React.FC = () => {
         }
 
         .payment-communication {
-          font-size: 9px;
+          font-size: 11px;
           color: #6b7280;
           margin-top: auto;
         }
@@ -435,7 +435,7 @@ const InvoiceViewPage: React.FC = () => {
         .totals-table td {
           padding: 4px 8px;
           border: 1px solid #e5e7eb;
-          font-size: 9px;
+          font-size: 11px;
         }
 
         .totals-table .label {
@@ -452,12 +452,12 @@ const InvoiceViewPage: React.FC = () => {
           background: #374151;
           color: #fff !important;
           font-weight: bold;
-          font-size: 10px;
+          font-size: 12px;
         }
 
         .amount-words {
           text-align: right;
-          font-size: 9px;
+          font-size: 11px;
           color: #6b7280;
           margin-top: 6px;
         }
@@ -473,7 +473,7 @@ const InvoiceViewPage: React.FC = () => {
         .invoice-footer p {
           color: #6b7280;
           margin-bottom: 3px;
-          font-size: 8px;
+          font-size: 10px;
         }
 
         .strictly-note {
@@ -494,7 +494,7 @@ const InvoiceViewPage: React.FC = () => {
             word-break: break-word;
             overflow-wrap: break-word;
             padding: 2px 4px;
-            font-size: 8px;
+            font-size: 10px;
           }
           .a4-invoice-print tr, .a4-invoice-print table { page-break-inside: avoid; }
         }

@@ -298,12 +298,12 @@ const SalesDashboardPage: React.FC = () => {
     {
       label: 'Payroll',
       items: [
-        { to: '/payroll-management', label: 'Payroll Overview', icon: <WalletIcon className="h-4 w-4" />, color: 'bg-white text-red-700 border-gray-300 hover:bg-red-50' },
-        { to: '/payroll-runs', label: 'Payroll Runs', icon: <CalendarIcon className="h-4 w-4" />, color: 'bg-white text-green-700 border-gray-300 hover:bg-green-50' },
         { to: '/payroll-staff', label: 'Staff Payroll Setup', icon: <UsersIcon className="h-4 w-4" />, color: 'bg-white text-sky-700 border-gray-300 hover:bg-sky-50' },
         { to: '/payroll-statutory', label: 'Statutory Deductions', icon: <SlidersIcon className="h-4 w-4" />, color: 'bg-white text-violet-700 border-gray-300 hover:bg-violet-50' },
         { to: '/payroll-accounts', label: 'Payroll Account Links', icon: <FileTextIcon className="h-4 w-4" />, color: 'bg-white text-amber-700 border-gray-300 hover:bg-amber-50' },
         { to: '/sales-rep-payroll', label: 'Sales Rep Payroll', icon: <WalletIcon className="h-4 w-4" />, color: 'bg-white text-teal-700 border-gray-300 hover:bg-teal-50' },
+        { to: '/sales-rep-advances', label: 'Salary Advances', icon: <WalletIcon className="h-4 w-4" />, color: 'bg-white text-indigo-700 border-gray-300 hover:bg-indigo-50' },
+        { to: '/sales-rep-deductions', label: 'Sales Rep Deductions', icon: <SlidersIcon className="h-4 w-4" />, color: 'bg-white text-rose-700 border-gray-300 hover:bg-rose-50' },
       ],
     },
     {
