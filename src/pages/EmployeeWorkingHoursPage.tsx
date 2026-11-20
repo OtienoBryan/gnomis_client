@@ -13,10 +13,14 @@ import {
   UserCheck,
   UserX,
   BarChart3,
-  RefreshCw
+  RefreshCw,
+  Plus,
+  X,
+  Pencil
 } from 'lucide-react';
 import { API_CONFIG } from '../config/api';
 import api from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface WorkingHourRecord {
   id: number;
@@ -26,6 +30,7 @@ interface WorkingHourRecord {
   checkin_time: string | null;
   checkout_time: string | null;
   time_spent: string;
+  lunch_minutes?: number;
   status: string; // Present, Leave, Absent
 }
 
@@ -39,6 +44,44 @@ interface WorkingHoursStats {
   onTimeCount: number;
   lateCount: number;
 }
+
+const LUNCH_MINUTES = 30;
+
+// Compute time spent in the browser (local clock) so records without a check-out
+// show a running total, and the 30-minute lunch break is deducted.
+// Parses "YYYY-MM-DD HH:MM:SS" and the older "YYYY-MM-DD HH:MM:SS am/pm" format as local time
+const parseLocal = (v: string | null): Date | null => {
+  if (!v) return null;
+  const m = v.trim().match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap]m)?/i);
+  if (!m) return null;
+  let h = parseInt(m[4], 10);
+  const mer = m[7]?.toLowerCase();
+  if (mer === 'pm' && h < 12) h += 12;
+  if (mer === 'am' && h === 12) h = 0;
+  const d = new Date(+m[1], +m[2] - 1, +m[3], h, +m[5], m[6] ? +m[6] : 0);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+const fmtMins = (mins: number) => `${Math.floor(mins / 60)}h ${mins % 60}m`;
+
+const withSpent = (r: WorkingHourRecord): WorkingHourRecord => {
+  const start = parseLocal(r.checkin_time);
+  if (!start) return r;
+  const co = parseLocal(r.checkout_time);
+  if (co) {
+    // Finished day: deduct the lunch break
+    const mins = Math.floor((co.getTime() - start.getTime()) / 60000);
+    if (mins <= 0) return { ...r, time_spent: '-', lunch_minutes: LUNCH_MINUTES };
+    return { ...r, lunch_minutes: LUNCH_MINUTES, time_spent: fmtMins(Math.max(0, mins - LUNCH_MINUTES)) };
+  }
+  // Still checked in: running total since check-in (lunch is deducted once checked out)
+  const mins = Math.floor((Date.now() - start.getTime()) / 60000);
+  return {
+    ...r,
+    lunch_minutes: LUNCH_MINUTES,
+    time_spent: mins > 0 ? `${fmtMins(mins)} (running)` : '0h 0m (running)'
+  };
+};
 
 const EmployeeWorkingHoursPage: React.FC = () => {
   const [records, setRecords] = useState<WorkingHourRecord[]>([]);
@@ -70,6 +113,87 @@ const EmployeeWorkingHoursPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage] = useState(20);
 
+  const { user } = useAuth();
+  const canPost = ['admin', 'manager', 'executive', 'hr'].includes(user?.role || '');
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Post / update modal. editing === null -> new record, otherwise updating that record's check-out
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+  const nowTime = () => new Date().toTimeString().slice(0, 5);
+  const [showModal, setShowModal] = useState(false);
+  const [editing, setEditing] = useState<WorkingHourRecord | null>(null);
+  const [form, setForm] = useState({ staff_id: '', date: todayStr(), checkin_time: '', checkout_time: '' });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const hhmm = (v: string | null) => (v && v.length >= 16 ? v.slice(11, 16) : '');
+
+  const openPost = () => {
+    setEditing(null);
+    setForm({ staff_id: '', date: todayStr(), checkin_time: '08:00', checkout_time: '' });
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  const openCheckout = (r: WorkingHourRecord) => {
+    setEditing(r);
+    setForm({
+      staff_id: String((r as any).staff_id ?? ''),
+      date: String(r.date).slice(0, 10),
+      checkin_time: hhmm(r.checkin_time),
+      checkout_time: hhmm(r.checkout_time) || nowTime()
+    });
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  const submitForm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    if (!editing && (!form.staff_id || !form.date || !form.checkin_time)) {
+      setFormError('Select a staff member, date and check-in time');
+      return;
+    }
+    if (editing && !form.checkout_time) {
+      setFormError('Enter the check-out time');
+      return;
+    }
+    if (form.checkout_time && form.checkin_time && form.checkout_time <= form.checkin_time) {
+      setFormError('Check-out time must be after check-in time');
+      return;
+    }
+    setSaving(true);
+    try {
+      if (editing) {
+        await api.put(`/employee-working-hours/${editing.id}`, {
+          checkout_time: form.checkout_time,
+          checkin_time: form.checkin_time
+        });
+      } else {
+        await api.post('/employee-working-hours', {
+          staff_id: Number(form.staff_id),
+          date: form.date,
+          checkin_time: form.checkin_time,
+          checkout_time: form.checkout_time || undefined
+        });
+      }
+      setShowModal(false);
+      setReloadKey(k => k + 1);
+    } catch (err: any) {
+      setFormError(err?.response?.data?.message || err.message || 'Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Keep running totals fresh for records that are still checked in
+  useEffect(() => {
+    const t = setInterval(() => {
+      setRecords(prev => (prev.some(r => r.checkin_time && !r.checkout_time) ? prev.map(r => (r.checkout_time ? r : withSpent(r))) : prev));
+    }, 60000);
+    return () => clearInterval(t);
+  }, []);
+
   // Calculate stats whenever records change
   useEffect(() => {
     if (records.length > 0) {
@@ -93,12 +217,11 @@ const EmployeeWorkingHoursPage: React.FC = () => {
 
       const averageHours = totalRecords > 0 ? totalHours / totalRecords : 0;
 
-      // Count on-time vs late (assuming check-in before 9:00 AM is on-time)
+      // Count on-time vs late (check-in at or before 8:00 AM is on-time)
       const onTimeCount = presentRecords.filter(r => {
         if (!r.checkin_time) return false;
         const checkinTime = new Date(r.checkin_time);
-        const hours = checkinTime.getHours();
-        return hours < 9;
+        return checkinTime.getHours() * 60 + checkinTime.getMinutes() <= 8 * 60;
       }).length;
 
       setStats({
@@ -157,14 +280,14 @@ const EmployeeWorkingHoursPage: React.FC = () => {
         const data = Array.isArray(res.data) ? res.data : [];
         console.log('Employee working hours data:', data);
         console.log('Data length:', data.length);
-        setRecords(data);
+        setRecords(data.map(withSpent));
       })
       .catch(err => {
         console.error('Error fetching working hours:', err);
         setError(err.message || 'Failed to fetch working hours');
       })
       .finally(() => setLoading(false));
-  }, [startDate, endDate, staffId]);
+  }, [startDate, endDate, staffId, reloadKey]);
 
   const clearFilters = () => {
     const now = new Date();
@@ -209,9 +332,9 @@ const EmployeeWorkingHoursPage: React.FC = () => {
     const checkinHour = checkin.getHours();
     const checkinMinute = checkin.getMinutes();
     const checkinTimeInMinutes = checkinHour * 60 + checkinMinute;
-    const nineAMInMinutes = 9 * 60; // 9:00 AM in minutes
-    
-    if (checkinTimeInMinutes <= nineAMInMinutes) {
+    const eightAMInMinutes = 8 * 60; // 8:00 AM in minutes
+
+    if (checkinTimeInMinutes <= eightAMInMinutes) {
       return { status: 'On Time', color: 'bg-green-100 text-green-800 border-green-200', icon: <CheckCircle className="w-3 h-3" /> };
     } else {
       return { status: 'Late', color: 'bg-red-100 text-red-800 border-red-200', icon: <AlertCircle className="w-3 h-3" /> };
@@ -235,7 +358,7 @@ const EmployeeWorkingHoursPage: React.FC = () => {
   };
 
   const exportToCSV = () => {
-    const headers = ['Name', 'Department', 'Date', 'Check-in', 'Check-in Status', 'Check-out', 'Check-out Status', 'Time Spent', 'Status'];
+    const headers = ['Name', 'Department', 'Date', 'Check-in', 'Check-in Status', 'Check-out', 'Check-out Status', 'Time Spent (excl. lunch)', 'Lunch (min)', 'Status'];
     const csvContent = [
       headers.join(','),
       ...filteredRecords.map(record => {
@@ -250,6 +373,7 @@ const EmployeeWorkingHoursPage: React.FC = () => {
           `"${record.checkout_time ? new Date(record.checkout_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}"`,
           `"${checkoutStatus.status}"`,
           `"${record.time_spent}"`,
+          `"${record.lunch_minutes || 0}"`,
           `"${record.status}"`
         ].join(',');
       })
@@ -279,7 +403,7 @@ const EmployeeWorkingHoursPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full">
         {/* Header Section */}
         <div className="mb-3">
           <div className="flex items-center justify-between mb-3">
@@ -298,6 +422,15 @@ const EmployeeWorkingHoursPage: React.FC = () => {
                 <RefreshCw className="w-3 h-3" />
                 Refresh
               </button>
+              {canPost && (
+                <button
+                  onClick={openPost}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                  Post Record
+                </button>
+              )}
               <button
                 onClick={exportToCSV}
                 className="flex items-center gap-1 px-2.5 py-1 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
@@ -436,14 +569,16 @@ const EmployeeWorkingHoursPage: React.FC = () => {
                     <th className="px-3 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">Check-in Status</th>
                     <th className="px-3 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">Check-out</th>
                     <th className="px-3 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">Check-out Status</th>
-                    <th className="px-3 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">Time Spent</th>
+                    <th className="px-3 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">Time Spent (excl. lunch)</th>
+                    <th className="px-3 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">Lunch</th>
                     <th className="px-3 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    {canPost && <th className="px-3 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">Action</th>}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {currentRecords.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="px-3 py-6 text-center">
+                      <td colSpan={canPost ? 11 : 10} className="px-3 py-6 text-center">
                         <div className="flex flex-col items-center">
                           <Clock className="w-8 h-8 text-gray-400 mb-2" />
                           <h3 className="text-xs font-medium text-gray-900 mb-1">No records found</h3>
@@ -494,11 +629,27 @@ const EmployeeWorkingHoursPage: React.FC = () => {
                             <div className="text-xs text-gray-900">{record.time_spent}</div>
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap">
+                            <div className="text-xs text-gray-900">{record.lunch_minutes ? `${record.lunch_minutes}m` : '-'}</div>
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
                             <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-medium border ${getStatusColor(record.status)}`}>
                               {React.cloneElement(getStatusIcon(record.status), { className: 'w-2.5 h-2.5' })}
                               {record.status}
                             </span>
                           </td>
+                          {canPost && (
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              {record.checkin_time && (
+                                <button
+                                  onClick={() => openCheckout(record)}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] border border-gray-300 rounded-md hover:bg-gray-50 text-gray-700"
+                                >
+                                  <Pencil className="w-2.5 h-2.5" />
+                                  {record.checkout_time ? 'Edit' : 'Check-out'}
+                                </button>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       );
                     })
@@ -564,8 +715,92 @@ const EmployeeWorkingHoursPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !saving && setShowModal(false)}>
+          <form
+            onSubmit={submitForm}
+            onClick={e => e.stopPropagation()}
+            className="bg-white rounded-lg shadow-xl w-full max-w-md"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <h3 className="text-sm font-semibold text-gray-900">
+                {editing ? 'Update Check-out' : 'Post Attendance Record'}
+              </h3>
+              <button type="button" onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Staff Member</label>
+                <select
+                  className="w-full px-2.5 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-red-500 focus:border-red-500 disabled:bg-gray-100"
+                  value={form.staff_id}
+                  onChange={e => setForm({ ...form, staff_id: e.target.value })}
+                  disabled={!!editing}
+                  required
+                >
+                  <option value="">Select staff...</option>
+                  {staffList.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
+                <input
+                  type="date"
+                  className="w-full px-2.5 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-red-500 focus:border-red-500 disabled:bg-gray-100"
+                  value={form.date}
+                  max={todayStr()}
+                  onChange={e => setForm({ ...form, date: e.target.value })}
+                  disabled={!!editing}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Check-in Time</label>
+                  <input
+                    type="time"
+                    className="w-full px-2.5 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                    value={form.checkin_time}
+                    onChange={e => setForm({ ...form, checkin_time: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Check-out Time{!editing && <span className="text-gray-400"> (optional)</span>}
+                  </label>
+                  <input
+                    type="time"
+                    className="w-full px-2.5 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                    value={form.checkout_time}
+                    onChange={e => setForm({ ...form, checkout_time: e.target.value })}
+                    required={!!editing}
+                  />
+                </div>
+              </div>
+              {!editing && (
+                <p className="text-[11px] text-gray-500">Leave check-out empty now and update it at the end of the day from the table.</p>
+              )}
+              {formError && <p className="text-xs text-red-600">{formError}</p>}
+            </div>
+            <div className="flex justify-end gap-2 px-4 py-3 border-t border-gray-200">
+              <button type="button" onClick={() => setShowModal(false)} className="px-3 py-1.5 text-xs border border-gray-300 rounded-md hover:bg-gray-50">
+                Cancel
+              </button>
+              <button type="submit" disabled={saving} className="px-3 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50">
+                {saving ? 'Saving...' : editing ? 'Update' : 'Post Record'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };
 
-export default EmployeeWorkingHoursPage; 
+export default EmployeeWorkingHoursPage;
