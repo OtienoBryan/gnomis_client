@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Staff, staffService, CreateStaffData } from '../services/staffService';
+import { STAFF_DEPARTMENTS, STAFF_DESIGNATIONS, withCurrent } from '../constants/staffOptions';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { teamService } from '../services/teamService';
@@ -1673,9 +1674,9 @@ const StaffList: React.FC = () => {
                         className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-[10px]"
                       >
                         <option value="">Select Designation</option>
-                        <option value="Executive">Executive</option>
-                        <option value="Head of Department">Head of Department</option>
-                        <option value="Staff Member">Staff Member</option>
+                        {withCurrent(STAFF_DESIGNATIONS, newStaff.designation).map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -1683,24 +1684,23 @@ const StaffList: React.FC = () => {
                         Department *
                       </label>
                       <select
-                        name="department_id"
+                        name="department"
                         id="department_id"
                         required
-                        value={newStaff.department_id || ''}
+                        value={newStaff.department || ''}
                         onChange={(e) => {
-                          const selectedDept = myDepartments.find(dept => dept.id === parseInt(e.target.value));
                           setNewStaff(prev => ({
                             ...prev,
-                            department_id: parseInt(e.target.value) || undefined,
-                            department: selectedDept?.name || ''
+                            department_id: undefined,
+                            department: e.target.value
                           }));
                         }}
                         className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500 text-[10px]"
                       >
                         <option value="">Select a department</option>
-                        {myDepartments.map((dept) => (
-                          <option key={dept.id} value={dept.id}>
-                            {dept.name}
+                        {withCurrent(STAFF_DEPARTMENTS, newStaff.department?.trim()).map((dept) => (
+                          <option key={dept} value={dept}>
+                            {dept}
                           </option>
                         ))}
                       </select>
