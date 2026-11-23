@@ -20,6 +20,49 @@ export interface SalesRep {
   device_status?: 0 | 1 | null; // 0 = unlocked, 1 = locked
 }
 
+export interface ContactEntry { name: string; relationship: string; contact: string; }
+export interface EducationEntry { institution: string; qualification: string; year: string; }
+export interface ExperienceEntry { organization: string; designation: string; from: string; to: string; reason: string; }
+export interface ReferenceEntry { name: string; position: string; company: string; phone: string; email: string; }
+
+/** Extended HR details for a sales rep, mirroring the staff form tabs. */
+export interface SalesRepProfile {
+  // Personal
+  id_no?: string;
+  gender?: string;
+  date_of_birth?: string;
+  marital_status?: string;
+  nationality?: string;
+  address?: string;
+  // Offer
+  empl_no?: string;
+  designation?: string;
+  employment_type?: string;
+  offer_date?: string;
+  start_date?: string;
+  department_email?: string;
+  benefits?: string[];
+  // Contacts
+  beneficiaries?: ContactEntry[];
+  emergency_contacts?: ContactEntry[];
+  family?: ContactEntry[];
+  // Statutory
+  nhif_number?: string;
+  nssf_number?: string;
+  kra_pin?: string;
+  passport_number?: string;
+  // Bank
+  bank_name?: string;
+  bank_branch?: string;
+  account_number?: string;
+  account_name?: string;
+  swift_code?: string;
+  // History
+  education?: EducationEntry[];
+  work_experience?: ExperienceEntry[];
+  references?: ReferenceEntry[];
+}
+
 export interface CreateSalesRepData {
   name: string;
   email: string;
@@ -31,6 +74,7 @@ export interface CreateSalesRepData {
   role?: string; // 'sales rep' or 'team leader'
   expected_weekly_coverage?: number;
   basic_salary?: number;
+  profile?: SalesRepProfile;
 }
 
 export interface UpdateSalesRepData extends CreateSalesRepData {
@@ -190,7 +234,8 @@ export const salesService = {
       photo: data.photoUrl, // backend expects 'photo'
       role: data.role,
       expected_weekly_coverage: data.expected_weekly_coverage,
-      basic_salary: data.basic_salary
+      basic_salary: data.basic_salary,
+      profile: data.profile
     };
     const response = await axios.post(`${API_BASE_URL}/sales-reps`, payload);
     return response.data;
@@ -209,10 +254,23 @@ export const salesService = {
       photoUrl: data.photoUrl, // backend expects 'photoUrl'
       role: data.role, // backend expects 'role'
       expected_weekly_coverage: data.expected_weekly_coverage,
-      basic_salary: data.basic_salary
+      basic_salary: data.basic_salary,
+      profile: data.profile
     };
     const response = await axios.put(`${API_BASE_URL}/sales-reps/${data.id}`, payload);
     return response.data;
+  },
+
+  // Get a single sales rep (any status)
+  getSalesRepById: async (id: number): Promise<SalesRep> => {
+    const response = await axios.get(`${API_BASE_URL}/sales-reps/${id}`);
+    return response.data;
+  },
+
+  // Get a sales rep's extended profile (offer details, beneficiaries, etc.)
+  getSalesRepProfile: async (id: number): Promise<SalesRepProfile> => {
+    const response = await axios.get(`${API_BASE_URL}/sales-reps/${id}/profile`);
+    return response.data || {};
   },
 
   // Delete a sales rep

@@ -1,377 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { salesService, SalesRep, CreateSalesRepData, Country, Region, Route as SalesRoute, SalesRepTargets } from '../services/salesService';
+import { salesService, SalesRep, Country, Region, Route as SalesRoute, SalesRepTargets } from '../services/salesService';
 import axios from 'axios';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { saveAs } from 'file-saver';
 import SalesRepTargetsModal from '../components/SalesRepTargetsModal';
 import { useAuth } from '../contexts/AuthContext';
-
-interface SalesRepModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  salesRep?: SalesRep;
-  onSubmit: (data: CreateSalesRepData) => void;
-  loading: boolean;
-  error?: string | null;
-}
-
-const SalesRepModal: React.FC<SalesRepModalProps> = ({ 
-  isOpen, 
-  onClose, 
-  salesRep, 
-  onSubmit, 
-  loading,
-  error: submitError
-}) => {
-  const [formData, setFormData] = useState<CreateSalesRepData & { status?: number }>({
-    name: '',
-    email: '',
-    phoneNumber: '',
-    country: '',
-    region: '',
-    route_name_update: '',
-    photoUrl: '',
-    role: 'sales rep',
-    expected_weekly_coverage: undefined,
-    basic_salary: undefined,
-    status: 1,
-  });
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [regions, setRegions] = useState<Region[]>([]);
-  const [routes, setRoutes] = useState<SalesRoute[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      salesService.getCountries().then(setCountries);
-      salesService.getRoutes().then(setRoutes);
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (formData.country) {
-      const selectedCountry = countries.find(c => c.name === formData.country);
-      if (selectedCountry) {
-        salesService.getRegions(selectedCountry.id).then(setRegions);
-      } else {
-        setRegions([]);
-      }
-    } else {
-      setRegions([]);
-    }
-  }, [formData.country, countries]);
-
-  useEffect(() => {
-    if (salesRep) {
-      setFormData({
-        name: salesRep.name,
-        email: salesRep.email,
-        phoneNumber: salesRep.phoneNumber || '',
-        country: salesRep.country || '',
-        region: salesRep.region || '',
-        route_name_update: salesRep.route_name_update || '',
-        photoUrl: salesRep.photoUrl || '',
-        role: salesRep.role || 'sales rep',
-        expected_weekly_coverage: salesRep.expected_weekly_coverage,
-        basic_salary: salesRep.basic_salary,
-        status: salesRep.status ?? 1,
-      });
-    } else {
-      setFormData({
-        name: '',
-        email: '',
-        phoneNumber: '',
-        country: '',
-        region: '',
-        route_name_update: '',
-        photoUrl: '',
-        role: 'sales rep',
-        expected_weekly_coverage: undefined,
-        basic_salary: undefined,
-        status: 1,
-      });
-    }
-  }, [salesRep]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit(formData);
-  };
-
-  if (!isOpen) return null;
-
-  const inputClass =
-    'block w-full border border-gray-200 rounded-lg px-3 py-2 text-xs bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 disabled:bg-gray-50 disabled:text-gray-400';
-  const labelClass = 'block text-[11px] font-medium text-gray-700 mb-1';
-  const sectionClass = 'text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-3';
-
-  const ROLE_OPTIONS = [
-    { value: 'sales rep', label: 'Sales Rep' },
-    { value: 'team leader', label: 'Team Leader' },
-    { value: 'driver', label: 'Driver' },
-  ];
-  const currentRole = formData.role || 'sales rep';
-
-  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    setUploadError(null);
-    const body = new FormData();
-    body.append('photo', file);
-    try {
-      const res = await fetch('/api/sales/sales-reps/upload-photo', { method: 'POST', body });
-      const data = await res.json();
-      if (data.url) {
-        setFormData(prev => ({ ...prev, photoUrl: data.url }));
-      } else {
-        setUploadError(data.error || 'Upload failed');
-      }
-    } catch (err: any) {
-      setUploadError(err.message || 'Upload failed');
-    }
-    setUploading(false);
-    e.target.value = '';
-  };
-
-  const initials = (formData.name || '').trim().charAt(0).toUpperCase();
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between">
-          <div>
-            <h2 className="text-sm font-bold text-gray-900">{salesRep ? 'Edit Staff' : 'Add New Staff'}</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {salesRep ? 'Update this staff member\'s details.' : 'Add a sales rep, team leader or driver.'}
-            </p>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors" aria-label="Close">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="flex flex-col min-h-0">
-          <div className="px-6 py-5 overflow-y-auto space-y-6">
-            {/* Role */}
-            <div>
-              <p className={sectionClass}>Role</p>
-              <div className="grid grid-cols-3 gap-2">
-                {ROLE_OPTIONS.map(opt => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, role: opt.value })}
-                    className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
-                      currentRole === opt.value
-                        ? 'bg-red-600 text-white border-red-600'
-                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Personal details */}
-            <div>
-              <p className={sectionClass}>Personal details</p>
-              <div className="flex items-center gap-4 mb-4">
-                <div className="h-14 w-14 rounded-full bg-gray-100 border border-gray-200 overflow-hidden flex items-center justify-center flex-shrink-0">
-                  {formData.photoUrl ? (
-                    <img src={formData.photoUrl} alt="Preview" className="h-full w-full object-cover" />
-                  ) : (
-                    <span className="text-base font-semibold text-gray-400">{initials || '?'}</span>
-                  )}
-                </div>
-                <div>
-                  <label className="inline-block px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 cursor-pointer">
-                    {uploading ? 'Uploading...' : formData.photoUrl ? 'Change photo' : 'Upload photo'}
-                    <input type="file" accept="image/*" onChange={handlePhotoChange} disabled={uploading} className="hidden" />
-                  </label>
-                  {formData.photoUrl && (
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, photoUrl: '' })}
-                      className="ml-2 text-xs text-red-600 hover:text-red-800"
-                    >
-                      Remove
-                    </button>
-                  )}
-                  {uploadError && <p className="text-[11px] text-red-600 mt-1">{uploadError}</p>}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <label className={labelClass}>Name <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    className={inputClass}
-                    placeholder="Full name"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Email <span className="text-red-500">*</span></label>
-                  <input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={e => setFormData({ ...formData, email: e.target.value })}
-                    className={inputClass}
-                    placeholder="name@example.com"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Phone Number <span className="text-red-500">*</span></label>
-                  <input
-                    type="tel"
-                    required
-                    value={formData.phoneNumber}
-                    onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })}
-                    className={inputClass}
-                    placeholder="e.g. 0712 345 678"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Location */}
-            <div>
-              <p className={sectionClass}>Location &amp; route</p>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className={labelClass}>Country</label>
-                  <select
-                    value={formData.country}
-                    onChange={e => setFormData({ ...formData, country: e.target.value, region: '' })}
-                    className={inputClass}
-                  >
-                    <option value="">Select country</option>
-                    {countries.map(c => (
-                      <option key={c.id} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>Region</label>
-                  <select
-                    value={formData.region}
-                    onChange={e => setFormData({ ...formData, region: e.target.value })}
-                    className={inputClass}
-                    disabled={!formData.country}
-                  >
-                    <option value="">{formData.country ? 'Select region' : 'Select country first'}</option>
-                    {regions.map(r => (
-                      <option key={r.id} value={r.name}>{r.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass}>Route</label>
-                  <select
-                    value={formData.route_name_update}
-                    onChange={e => setFormData({ ...formData, route_name_update: e.target.value })}
-                    className={inputClass}
-                  >
-                    <option value="">Select route</option>
-                    {routes.map(r => (
-                      <option key={r.id} value={r.name}>{r.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Work details */}
-            <div>
-              <p className={sectionClass}>Work details</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>Expected Weekly Coverage</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={formData.expected_weekly_coverage ?? ''}
-                    onChange={e => setFormData({ ...formData, expected_weekly_coverage: e.target.value ? Number(e.target.value) : undefined })}
-                    className={inputClass}
-                    placeholder="Enter number"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Basic Salary</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.basic_salary ?? ''}
-                    onChange={e => setFormData({ ...formData, basic_salary: e.target.value ? Number(e.target.value) : undefined })}
-                    className={inputClass}
-                    placeholder="Enter basic salary"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2.5">
-                <div>
-                  <p className="text-xs font-medium text-gray-800">Status</p>
-                  <p className="text-[11px] text-gray-500">{formData.status === 1 ? 'Active' : 'Inactive'}</p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={formData.status === 1}
-                  onClick={() => setFormData({ ...formData, status: formData.status === 1 ? 0 : 1 })}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                    formData.status === 1 ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                      formData.status === 1 ? 'translate-x-4' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {submitError && (
-            <div className="mx-6 mb-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-700">{submitError}</div>
-          )}
-          <div className="px-6 py-3 border-t border-gray-100 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || uploading}
-              className="px-4 py-2 rounded-lg text-xs font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors"
-            >
-              {loading ? 'Saving...' : salesRep ? 'Update' : 'Add Staff'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-};
-
 
 interface Manager {
   id: number;
@@ -643,10 +276,7 @@ const SalesRepsPage: React.FC = () => {
   const teamLeaderUserId =
     user?.role === 'team_leader' || user?.role === 'leader' ? user?.id ?? null : null;
   const isTeamLeaderUser = teamLeaderUserId !== null;
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingSalesRep, setEditingSalesRep] = useState<SalesRep | undefined>();
-  const [submitting, setSubmitting] = useState(false);
-  const [modalError, setModalError] = useState<string | null>(null);
+  const navigate = useNavigate();
   const [expandedPhotoUrl, setExpandedPhotoUrl] = useState<string | null>(null);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [selectedSalesRepId] = useState<number | null>(null);
@@ -971,16 +601,12 @@ const SalesRepsPage: React.FC = () => {
 
   const handleCreate = () => {
     if (isTeamLeaderUser) return;
-    setEditingSalesRep(undefined);
-    setModalError(null);
-    setModalOpen(true);
+    navigate('/sales-reps/new');
   };
 
   const handleEdit = (salesRep: SalesRep) => {
     if (isTeamLeaderUser) return;
-    setEditingSalesRep(salesRep);
-    setModalError(null);
-    setModalOpen(true);
+    navigate(`/sales-reps/${salesRep.id}/edit`);
   };
 
   const handleDelete = async (id: number) => {
@@ -995,27 +621,6 @@ const SalesRepsPage: React.FC = () => {
     } catch (err: any) {
       setError(err.message || 'Failed to delete sales rep');
     }
-  };
-
-  const handleSubmit = async (data: CreateSalesRepData & { status?: number }) => {
-    setSubmitting(true);
-    setModalError(null);
-    try {
-      if (editingSalesRep) {
-        await salesService.updateSalesRep({ ...data, id: editingSalesRep.id });
-        if (data.status !== undefined && data.status !== editingSalesRep.status) {
-          await salesService.updateSalesRepStatus(editingSalesRep.id, data.status);
-        }
-      } else {
-        await salesService.createSalesRep(data);
-      }
-      setModalOpen(false);
-      await fetchSalesReps();
-    } catch (err: any) {
-      // Keep the modal open and show the reason (e.g. a duplicate phone number) inside it
-      setModalError(err.response?.data?.error || err.message || 'Failed to save sales rep');
-    }
-    setSubmitting(false);
   };
 
   const handleSetTargets = (salesRep: SalesRep) => {
@@ -1528,15 +1133,6 @@ const SalesRepsPage: React.FC = () => {
           </div>
         )}
       </div>
-
-      <SalesRepModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        salesRep={editingSalesRep}
-        onSubmit={handleSubmit}
-        loading={submitting}
-        error={modalError}
-      />
 
       <AssignManagersModal
         isOpen={assignModalOpen}

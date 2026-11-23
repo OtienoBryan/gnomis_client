@@ -128,6 +128,7 @@ import TeamLeaderDashboardPage from './pages/TeamLeaderDashboardPage';
 import SalesRepsPage from './pages/SalesRepsPage';
 import ManagersPage from './pages/ManagersPage';
 import SalesRepDetailsPage from './pages/SalesRepDetailsPage';
+import SalesRepFormPage from './pages/SalesRepFormPage';
 import ClientsListPage from './pages/ClientsListPage';
 import HrDashboardPage from './pages/HrDashboardPage';
 import ClientsMapPage from './pages/ClientsMapPage';
@@ -1037,6 +1038,8 @@ const App = () => {
             <Route path="/products-sale-report" element={<ProductsSaleReportPage />} />
             <Route path="/products-sale-report/:id" element={<ProductSaleDetailPage />} />
             <Route path="/sales-reps" element={<SalesRepsPage />} />
+            <Route path="/sales-reps/new" element={<SalesRepFormPage />} />
+            <Route path="/sales-reps/:id/edit" element={<SalesRepFormPage />} />
             <Route path="/sales-reps/:id" element={<SalesRepDetailsPage />} />
             <Route path="/managers" element={<ManagersPage />} />
             <Route path="/hr-dashboard" element={
