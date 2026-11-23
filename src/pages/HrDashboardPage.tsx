@@ -25,9 +25,7 @@ import {
   MessageCircleIcon,
   ClockIcon,
   UserCheckIcon,
-  UserXIcon,
   BuildingIcon,
-  BriefcaseIcon,
   PlusIcon,
   Trash2Icon,
   ArrowUpRightIcon,
@@ -231,13 +229,10 @@ const HrDashboardPage: React.FC = () => {
     { to: '/dashboard/expiring-contracts', label: 'Expiring Contracts', icon: <AlertTriangleIcon className="h-4 w-4" />, tone: 'amber' },
     { to: '/dashboard/employee-leaves', label: 'Employee Leaves', icon: <CalendarIcon className="h-4 w-4" />, tone: 'purple' },
     { to: '/dashboard/leave-report', label: 'Leave Report', icon: <FileTextIcon className="h-4 w-4" />, tone: 'blue' },
-    { to: '/employee-working-hours', label: 'Attendance History', icon: <ClockIcon className="h-4 w-4" />, tone: 'green' },
+    { to: '/attendance-history', label: 'Attendance History', icon: <ClockIcon className="h-4 w-4" />, tone: 'green' },
     { to: '/employee-working-days', label: 'Working Days', icon: <CalendarIcon className="h-4 w-4" />, tone: 'amber' },
     { to: '/public-holidays', label: 'Public Holidays', icon: <CalendarIcon className="h-4 w-4" />, tone: 'orange' },
-    { to: '/out-of-office-requests', label: 'Out of Office', icon: <UserXIcon className="h-4 w-4" />, tone: 'pink' },
-    { to: '/sales-reps', label: 'Sales Reps', icon: <BuildingIcon className="h-4 w-4" />, tone: 'cyan' },
-    { to: '/department-expenses/upload', label: 'Dept Expenses', icon: <BriefcaseIcon className="h-4 w-4" />, tone: 'slate' },
-    { to: '/instant-chat', label: 'Chat Room', icon: <MessageCircleIcon className="h-4 w-4" />, tone: 'teal' }
+    { to: '/sales-reps', label: 'Sales Reps', icon: <BuildingIcon className="h-4 w-4" />, tone: 'cyan' }
   ];
 
   // Same payroll cards as the sales dashboard
@@ -265,14 +260,13 @@ const HrDashboardPage: React.FC = () => {
   const selectedTasks = tasks[selectedDate] ?? [];
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 px-4 pb-6 sm:px-6 lg:px-8">
       <div className="w-full">
         {/* Header */}
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-sm font-medium text-red-600">{greeting}</p>
             <h1 className="mt-0.5 text-2xl font-semibold tracking-tight text-gray-900">HR Dashboard</h1>
-            <p className="mt-1 text-sm text-gray-500">Employees, attendance and HR operations at a glance.</p>
           </div>
           <div className="inline-flex items-center gap-2 self-start rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 shadow-sm sm:self-auto">
             <CalendarIcon className="h-4 w-4 text-gray-400" />
@@ -281,7 +275,7 @@ const HrDashboardPage: React.FC = () => {
         </div>
 
         {/* Stat cards */}
-        <div className="mb-5 grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           <StatCard
             title="Total Employees"
             value={loading ? '–' : totalCount}

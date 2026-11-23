@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { FiSearch, FiFilter, FiDownload, FiRefreshCw, FiUser, FiCalendar, FiX, FiChevronLeft, FiChevronRight, FiChevronDown, FiAlertCircle, FiEdit2, FiSave, FiPlus, FiLogOut } from 'react-icons/fi';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { FiSearch, FiFilter, FiDownload, FiRefreshCw, FiUser, FiCalendar, FiX, FiChevronLeft, FiChevronRight, FiChevronDown, FiEdit2, FiSave, FiPlus, FiLogOut } from 'react-icons/fi';
 import api from '../services/api';
 
 interface AttendanceRecord {
@@ -13,7 +13,6 @@ interface AttendanceRecord {
   date: string;
   checkin_time: string | null;
   checkout_time: string | null;
-  corrected?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -37,19 +36,20 @@ const toDbTime = (v: string) => (v ? `${v.replace('T', ' ').slice(0, 16)}:00` : 
 const toInputTime = (v: string | null) => (v ? v.replace(' ', 'T').slice(0, 16) : '');
 
 const AttendanceHistoryPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [filteredAttendance, setFilteredAttendance] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10)); // Today's date as default
-  const [endDate, setEndDate] = useState('');
-  const [staffId, setStaffId] = useState('');
+  const [startDate, setStartDate] = useState(() => searchParams.get('start_date') || new Date().toISOString().slice(0, 10)); // Today's date as default
+  const [endDate, setEndDate] = useState(() => searchParams.get('end_date') || '');
+  const [staffId, setStaffId] = useState(() => searchParams.get('staff_id') || '');
   const [department, setDepartment] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(() => !!searchParams.get('staff_id'));
   const [showAbsent, setShowAbsent] = useState(false);
   const [checkoutRecord, setCheckoutRecord] = useState<AttendanceRecord | null>(null);
   const [checkoutTime, setCheckoutTime] = useState('');
@@ -73,8 +73,6 @@ const AttendanceHistoryPage: React.FC = () => {
     checkout_time: ''
   });
   const [addLoading, setAddLoading] = useState(false);
-  const [monthlyRecordCount, setMonthlyRecordCount] = useState(0);
-  const [existingRecordForDate, setExistingRecordForDate] = useState<AttendanceRecord | null>(null);
   const navigate = useNavigate();
 
   // Fetch staff list for filter dropdown
@@ -226,7 +224,7 @@ const AttendanceHistoryPage: React.FC = () => {
   };
 
   const exportToCSV = () => {
-    const headers = ['Name', 'Department', 'Role', 'Date', 'Check-in', 'Check-out', 'Status', 'Time Spent', 'Lunch (min)', 'Working Hours', 'Corrected'];
+    const headers = ['Name', 'Department', 'Role', 'Date', 'Check-in', 'Check-out', 'Status', 'Time Spent', 'Lunch (min)', 'Working Hours'];
     const csvContent = [
       headers.join(','),
       ...filteredAttendance.map(record => {
@@ -242,8 +240,7 @@ const AttendanceHistoryPage: React.FC = () => {
           getStatusText(record),
           timeSpentStr,
           record.checkin_time ? LUNCH_MINUTES : 0,
-          workingMinutes(record) === null ? '-' : fmtMins(workingMinutes(record) as number),
-          record.corrected ? 'Yes' : 'No'
+          workingMinutes(record) === null ? '-' : fmtMins(workingMinutes(record) as number)
         ].join(',');
       })
     ].join('\n');
@@ -356,60 +353,7 @@ const AttendanceHistoryPage: React.FC = () => {
       checkin_time: '',
       checkout_time: ''
     });
-    setMonthlyRecordCount(0);
     setShowAddModal(true);
-  };
-
-  // Check monthly record count for selected employee
-  const checkMonthlyRecordCount = async (staffId: string, date: string) => {
-    if (!staffId || !date) {
-      setMonthlyRecordCount(0);
-      return;
-    }
-
-    try {
-      const recordDate = new Date(date);
-      const year = recordDate.getFullYear();
-      const month = recordDate.getMonth() + 1;
-      
-      const params = new URLSearchParams();
-      params.append('staff_id', staffId);
-      params.append('year', year.toString());
-      params.append('month', month.toString());
-      
-      try {
-        const response = await api.get(`/attendance/monthly-count?${params.toString()}`);
-        setMonthlyRecordCount(response.data.count || 0);
-      } catch (err) {
-        // Ignore errors for monthly count
-      }
-    } catch (error) {
-      console.error('Error checking monthly record count:', error);
-      setMonthlyRecordCount(0);
-    }
-  };
-
-  const checkExistingRecordForDate = async (staffId: string, date: string) => {
-    if (!staffId || !date) {
-      setExistingRecordForDate(null);
-      return;
-    }
-
-    try {
-      const params = new URLSearchParams();
-      params.append('staff_id', staffId);
-      params.append('date', date);
-      
-      const response = await api.get(`/attendance?${params.toString()}`);
-      if (response.data.length > 0) {
-        setExistingRecordForDate(response.data[0]);
-      } else {
-        setExistingRecordForDate(null);
-      }
-    } catch (error) {
-      console.error('Error checking existing record:', error);
-      setExistingRecordForDate(null);
-    }
   };
 
   const closeAddModal = () => {
@@ -420,18 +364,7 @@ const AttendanceHistoryPage: React.FC = () => {
       checkin_time: '',
       checkout_time: ''
     });
-    setMonthlyRecordCount(0);
   };
-
-  // Check monthly record count and existing records when staff or date changes
-  useEffect(() => {
-    if (addFormData.staff_id && addFormData.date) {
-      checkMonthlyRecordCount(addFormData.staff_id, addFormData.date);
-      checkExistingRecordForDate(addFormData.staff_id, addFormData.date);
-    } else {
-      setExistingRecordForDate(null);
-    }
-  }, [addFormData.staff_id, addFormData.date]);
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1190,41 +1123,6 @@ const AttendanceHistoryPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                {/* Existing Record Warning */}
-                {existingRecordForDate && (
-                  <div className="mt-2 p-3 bg-red-50 rounded-lg border border-red-200">
-                    <div className="flex items-center">
-                      <FiAlertCircle className="w-4 h-4 text-red-500 mr-2" />
-                      <div className="text-sm text-red-900">
-                        <strong>Record Already Exists:</strong> This employee already has an attendance record for {new Date(existingRecordForDate.date).toLocaleDateString()}.
-                      </div>
-                    </div>
-                    <div className="text-xs text-red-700 mt-2">
-                      Check-in: {existingRecordForDate.checkin_time ? new Date(existingRecordForDate.checkin_time).toLocaleTimeString() : 'Not recorded'} | 
-                      Check-out: {existingRecordForDate.checkout_time ? new Date(existingRecordForDate.checkout_time).toLocaleTimeString() : 'Not recorded'}
-                    </div>
-                    <div className="text-xs text-red-700 mt-1">
-                      Please choose a different date or edit the existing record.
-                    </div>
-                  </div>
-                )}
-
-                {/* Monthly Record Count Info */}
-                {addFormData.staff_id && addFormData.date && !existingRecordForDate && (
-                  <div className="mt-2 p-3 bg-red-50 rounded-lg">
-                    <div className="text-sm text-red-900">
-                      <strong>Total Records:</strong> {monthlyRecordCount}/2 for this month
-                    </div>
-                    {monthlyRecordCount >= 2 && (
-                      <div className="text-sm text-red-600 mt-1">
-                        ⚠️ Maximum records reached. Cannot add more records for this employee this month.
-                      </div>
-                    )}
-                    <div className="text-xs text-red-700 mt-2">
-                      <strong>Note:</strong> Manually created records are marked as "Corrected" but still count toward the monthly limit.
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Date */}
@@ -1292,7 +1190,7 @@ const AttendanceHistoryPage: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={addLoading || !addFormData.staff_id || !addFormData.date || monthlyRecordCount >= 2 || !!existingRecordForDate}
+                  disabled={addLoading || !addFormData.staff_id || !addFormData.date}
                   className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center"
                 >
                   {addLoading ? (
@@ -1300,20 +1198,10 @@ const AttendanceHistoryPage: React.FC = () => {
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                       Creating...
                     </>
-                  ) : existingRecordForDate ? (
-                    <>
-                      <FiX className="w-4 h-4 mr-2" />
-                      Record Exists
-                    </>
-                  ) : monthlyRecordCount >= 2 ? (
-                    <>
-                      <FiX className="w-4 h-4 mr-2" />
-                      Monthly Limit Reached
-                    </>
                   ) : (
                     <>
                       <FiPlus className="w-4 h-4 mr-2" />
-                      Create Record (Corrected)
+                      Create Record
                     </>
                   )}
                 </button>

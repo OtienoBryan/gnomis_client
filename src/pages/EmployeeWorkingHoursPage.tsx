@@ -24,6 +24,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface WorkingHourRecord {
   id: number;
+  staff_id?: number;
   name: string;
   department: string;
   date: string;
@@ -31,7 +32,7 @@ interface WorkingHourRecord {
   checkout_time: string | null;
   time_spent: string;
   lunch_minutes?: number;
-  status: string; // Present, Leave, Absent
+  status: string; // Present, Absent
 }
 
 interface WorkingHoursStats {
@@ -138,7 +139,7 @@ const EmployeeWorkingHoursPage: React.FC = () => {
   const openCheckout = (r: WorkingHourRecord) => {
     setEditing(r);
     setForm({
-      staff_id: String((r as any).staff_id ?? ''),
+      staff_id: String(r.staff_id ?? ''),
       date: String(r.date).slice(0, 10),
       checkin_time: hhmm(r.checkin_time),
       checkout_time: hhmm(r.checkout_time) || nowTime()
@@ -165,16 +166,18 @@ const EmployeeWorkingHoursPage: React.FC = () => {
     setSaving(true);
     try {
       if (editing) {
-        await api.put(`/employee-working-hours/${editing.id}`, {
-          checkout_time: form.checkout_time,
-          checkin_time: form.checkin_time
+        await api.put(`/attendance/${editing.id}`, {
+          date: form.date,
+          checkin_time: `${form.date} ${form.checkin_time}:00`,
+          checkout_time: `${form.date} ${form.checkout_time}:00`,
+          checkout_only: true
         });
       } else {
-        await api.post('/employee-working-hours', {
+        await api.post('/attendance', {
           staff_id: Number(form.staff_id),
           date: form.date,
-          checkin_time: form.checkin_time,
-          checkout_time: form.checkout_time || undefined
+          checkin_time: `${form.date} ${form.checkin_time}:00`,
+          checkout_time: form.checkout_time ? `${form.date} ${form.checkout_time}:00` : null
         });
       }
       setShowModal(false);
@@ -274,17 +277,27 @@ const EmployeeWorkingHoursPage: React.FC = () => {
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
     if (staffId) params.append('staff_id', staffId);
-    api.get(`/employee-working-hours?${params.toString()}`)
+    // Same data source as the Attendance History page, so both stay in sync.
+    api.get(`/attendance?${params.toString()}`)
       .then(res => {
         // Ensure we always have an array
         const data = Array.isArray(res.data) ? res.data : [];
-        console.log('Employee working hours data:', data);
-        console.log('Data length:', data.length);
-        setRecords(data.map(withSpent));
+        const mapped: WorkingHourRecord[] = data.map((r: any) => withSpent({
+          id: r.id,
+          staff_id: r.staff_id,
+          name: r.name,
+          department: r.department,
+          date: r.date,
+          checkin_time: r.checkin_time,
+          checkout_time: r.checkout_time,
+          time_spent: '',
+          status: r.checkin_time ? 'Present' : 'Absent'
+        }));
+        setRecords(mapped);
       })
       .catch(err => {
-        console.error('Error fetching working hours:', err);
-        setError(err.message || 'Failed to fetch working hours');
+        console.error('Error fetching attendance:', err);
+        setError(err.response?.data?.message || err.message || 'Failed to fetch working hours');
       })
       .finally(() => setLoading(false));
   }, [startDate, endDate, staffId, reloadKey]);
