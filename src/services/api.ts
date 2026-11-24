@@ -97,6 +97,12 @@ api.interceptors.response.use(
         url: error.config?.url
       });
       
+      // A failed login (wrong username/password) is not an expired session: pass the original
+      // error through so the login page can read the status and show "Invalid credentials"
+      if ((status === 401 || status === 403) && String(error.config?.url || '').includes('/auth/login')) {
+        return Promise.reject(error);
+      }
+
       // Handle authentication errors (401 Unauthorized)
       if (status === 401) {
         console.warn('🔐 Authentication failed - token expired or invalid');

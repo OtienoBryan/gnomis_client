@@ -85,7 +85,7 @@ const LoginPage: React.FC = () => {
           });
           // Handle different HTTP status codes for authentication errors
           if (error.response?.status === 401 || error.response?.status === 403) {
-            setError('Incorrect credentials. Please check your username and password.');
+            setError('Invalid credentials. Please check your username and password.');
             setShowErrorPopup(true);
           } else if (error.response?.status === 400) {
             // Check if the error message contains credential-related text
@@ -94,7 +94,7 @@ const LoginPage: React.FC = () => {
                 errorMessage.toLowerCase().includes('credentials') ||
                 errorMessage.toLowerCase().includes('username') ||
                 errorMessage.toLowerCase().includes('password')) {
-              setError('Incorrect credentials. Please check your username and password.');
+              setError('Invalid credentials. Please check your username and password.');
             } else {
               setError(errorMessage || 'Invalid request. Please check your input.');
             }
@@ -111,7 +111,13 @@ const LoginPage: React.FC = () => {
           }
         } else {
           console.error('Non-Axios error:', error);
-          setError('An unexpected error occurred');
+          const msg = error instanceof Error ? error.message : '';
+          // The API client turns some failures into plain errors; still show a clear message
+          setError(
+            /authentication|credential|unauthori|forbidden/i.test(msg)
+              ? 'Invalid credentials. Please check your username and password.'
+              : msg || 'An unexpected error occurred'
+          );
           setShowErrorPopup(true);
         }
       } finally {

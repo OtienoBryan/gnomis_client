@@ -11,6 +11,9 @@ import {
   Download
 } from 'lucide-react';
 import api from '../services/api';
+import StaffLeavesModal from '../components/StaffLeavesModal';
+import HolidaysWeekendsModal from '../components/HolidaysWeekendsModal';
+import AbsentDaysModal from '../components/AbsentDaysModal';
 
 interface WorkingDaysRecord {
   id: number;
@@ -20,6 +23,8 @@ interface WorkingDaysRecord {
   days_present: number;
   leave_days: number;
   absent_days: number;
+  absent_dates?: string[];
+  absent_holiday_dates?: string[];
   holidays: number;
   attendance_pct: string;
 }
@@ -45,6 +50,9 @@ const EmployeeWorkingDaysPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [staffList, setStaffList] = useState<{ id: number; name: string }[]>([]);
+  const [leavesFor, setLeavesFor] = useState<{ id: number; name: string } | null>(null);
+  const [showHolidays, setShowHolidays] = useState(false);
+  const [absentFor, setAbsentFor] = useState<WorkingDaysRecord | null>(null);
   const [stats, setStats] = useState<AttendanceStats>({
     totalEmployees: 0,
     avgAttendance: 0,
@@ -145,7 +153,7 @@ const EmployeeWorkingDaysPage: React.FC = () => {
   };
 
   const exportToCSV = () => {
-    const headers = ['Name', 'Department', 'Working Days', 'Present Days', 'Leave Days', 'Absent Days', 'Holidays', 'Attendance %'];
+    const headers = ['Name', 'Department', 'Working Days', 'Present Days', 'Leave Days', 'Absent Days', 'Holidays & Weekends', 'Attendance %'];
     const csvContent = [
       headers.join(','),
       ...filteredRecords.map(record => [
@@ -360,7 +368,7 @@ const EmployeeWorkingDaysPage: React.FC = () => {
                       Absent Days
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Holidays
+                      Holidays &amp; Weekends
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Attendance
@@ -402,14 +410,35 @@ const EmployeeWorkingDaysPage: React.FC = () => {
                             {record.days_present}
                           </button>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-red-600">
-                          {record.leave_days}
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                          <button
+                            type="button"
+                            onClick={() => setLeavesFor({ id: record.id, name: record.name })}
+                            className="text-red-600 hover:text-red-800 hover:underline"
+                            title="View all leaves for this staff member"
+                          >
+                            {record.leave_days}
+                          </button>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-red-600">
-                          {record.absent_days}
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                          <button
+                            type="button"
+                            onClick={() => setAbsentFor(record)}
+                            className="text-red-600 hover:text-red-800 hover:underline"
+                            title="View the absent days"
+                          >
+                            {record.absent_days}
+                          </button>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-sm text-purple-600">
-                          {record.holidays || 0}
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                          <button
+                            type="button"
+                            onClick={() => setShowHolidays(true)}
+                            className="text-purple-600 hover:text-purple-800 hover:underline"
+                            title="View the holidays and weekends in this month"
+                          >
+                            {record.holidays || 0}
+                          </button>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getAttendanceBadge(record.attendance_pct)}`}>
@@ -425,6 +454,15 @@ const EmployeeWorkingDaysPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <StaffLeavesModal staff={leavesFor} month={month} onClose={() => setLeavesFor(null)} />
+      <HolidaysWeekendsModal month={showHolidays ? month : null} onClose={() => setShowHolidays(false)} />
+      <AbsentDaysModal
+        staff={absentFor ? { id: absentFor.id, name: absentFor.name, absent_dates: absentFor.absent_dates || [], absent_holiday_dates: absentFor.absent_holiday_dates } : null}
+        month={month}
+        onClose={() => setAbsentFor(null)}
+        onViewAttendance={(id) => { setAbsentFor(null); viewStaffAttendance(id); }}
+      />
     </div>
   );
 };

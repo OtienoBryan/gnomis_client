@@ -32,7 +32,8 @@ import {
   PercentIcon,
   InboxIcon,
   WalletIcon,
-  SlidersIcon
+  SlidersIcon,
+  MapPinIcon
 } from 'lucide-react';
 import io from 'socket.io-client';
 
@@ -232,7 +233,8 @@ const HrDashboardPage: React.FC = () => {
     { to: '/attendance-history', label: 'Attendance History', icon: <ClockIcon className="h-4 w-4" />, tone: 'green' },
     { to: '/employee-working-days', label: 'Working Days', icon: <CalendarIcon className="h-4 w-4" />, tone: 'amber' },
     { to: '/public-holidays', label: 'Public Holidays', icon: <CalendarIcon className="h-4 w-4" />, tone: 'orange' },
-    { to: '/sales-reps', label: 'Sales Reps', icon: <BuildingIcon className="h-4 w-4" />, tone: 'cyan' }
+    { to: '/sales-reps', label: 'Sales Reps', icon: <BuildingIcon className="h-4 w-4" />, tone: 'cyan' },
+    { to: '/staff-location', label: 'Sales Reps Location', icon: <MapPinIcon className="h-4 w-4" />, tone: 'teal' }
   ];
 
   // Same payroll cards as the sales dashboard
@@ -242,7 +244,8 @@ const HrDashboardPage: React.FC = () => {
     { to: '/payroll-statutory', label: 'Statutory Deductions', icon: <SlidersIcon className="h-4 w-4" />, accent: 'bg-violet-50 text-violet-600' },
     { to: '/payroll-accounts', label: 'Payroll Account Links', icon: <FileTextIcon className="h-4 w-4" />, accent: 'bg-amber-50 text-amber-600' },
     { to: '/sales-rep-payroll', label: 'Sales Rep Payroll', icon: <WalletIcon className="h-4 w-4" />, accent: 'bg-teal-50 text-teal-600' },
-    { to: '/sales-rep-advances', label: 'Salary Advances', icon: <WalletIcon className="h-4 w-4" />, accent: 'bg-indigo-50 text-indigo-600' },
+    { to: '/sales-rep-advances', label: 'Sales Rep Advances', icon: <WalletIcon className="h-4 w-4" />, accent: 'bg-indigo-50 text-indigo-600' },
+    { to: '/staff-advances', label: 'Staff Advances', icon: <WalletIcon className="h-4 w-4" />, accent: 'bg-emerald-50 text-emerald-600' },
     { to: '/sales-rep-deductions', label: 'Sales Rep Deductions', icon: <SlidersIcon className="h-4 w-4" />, accent: 'bg-rose-50 text-rose-600' },
   ];
 

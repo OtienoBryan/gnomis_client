@@ -23,9 +23,14 @@ export interface StaffPayrollRow {
   basic_salary: number;
   gross_pay: number;
   deductions: { id: number; name: string; account_id: number; amount: number }[];
+  advance_recovery?: number;
   total_deductions: number;
   net_pay: number;
 }
+
+// total_deductions from the API includes the salary advance recovery; show it separately
+const otherDeductions = (r: { total_deductions: number; advance_recovery?: number }) =>
+  Math.round((r.total_deductions - (r.advance_recovery || 0)) * 100) / 100;
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
@@ -76,16 +81,17 @@ const StaffPayrollPage: React.FC = () => {
   const totals = useMemo(
     () => ({
       gross: visible.reduce((s, r) => s + r.gross_pay, 0),
-      ded: visible.reduce((s, r) => s + r.total_deductions, 0),
+      ded: visible.reduce((s, r) => s + otherDeductions(r), 0),
+      adv: visible.reduce((s, r) => s + (r.advance_recovery || 0), 0),
       net: visible.reduce((s, r) => s + r.net_pay, 0),
     }),
     [visible]
   );
 
   const exportCSV = () => {
-    const head = ['Name', 'Role', 'Department', 'Basic Salary', 'Days Paid', 'Working Days', 'Gross Pay', 'Deductions', 'Net Pay', 'Paid'];
+    const head = ['Name', 'Role', 'Department', 'Basic Salary', 'Days Paid', 'Working Days', 'Gross Pay', 'Deductions', 'Advance', 'Net Pay', 'Paid'];
     const body = visible.map(r =>
-      [r.name, r.role || '', r.department || '', r.basic_salary, r.daysPaid, r.working_days, r.gross_pay, r.total_deductions, r.net_pay, r.already_paid ? 'Yes' : 'No']
+      [r.name, r.role || '', r.department || '', r.basic_salary, r.daysPaid, r.working_days, r.gross_pay, otherDeductions(r), r.advance_recovery || 0, r.net_pay, r.already_paid ? 'Yes' : 'No']
         .map(v => `"${String(v).replace(/"/g, '""')}"`)
         .join(',')
     );
@@ -123,11 +129,12 @@ const StaffPayrollPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
           {[
             { label: 'Staff', value: String(visible.length), tone: 'text-gray-900' },
             { label: 'Gross pay', value: formatKES(totals.gross), tone: 'text-gray-900' },
             { label: 'Deductions', value: formatKES(totals.ded), tone: 'text-red-600' },
+            { label: 'Advances', value: formatKES(totals.adv), tone: 'text-amber-600' },
             { label: 'Net pay', value: formatKES(totals.net), tone: 'text-green-600' },
           ].map(c => (
             <div key={c.label} className="bg-white border border-gray-200 rounded-md px-3 py-2">
@@ -170,15 +177,16 @@ const StaffPayrollPage: React.FC = () => {
                   <th className={`${th} text-center`}>Days paid</th>
                   <th className={`${th} text-right`}>Gross pay</th>
                   <th className={`${th} text-right`}>Deductions</th>
+                  <th className={`${th} text-right`}>Advance</th>
                   <th className={`${th} text-right`}>Net pay</th>
                   <th className={`${th} text-center`}>Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {loading ? (
-                  <tr><td colSpan={8} className="py-12 text-center text-xs text-gray-500">Loading…</td></tr>
+                  <tr><td colSpan={9} className="py-12 text-center text-xs text-gray-500">Loading…</td></tr>
                 ) : visible.length === 0 ? (
-                  <tr><td colSpan={8} className="py-12 text-center text-xs text-gray-500">No staff found.</td></tr>
+                  <tr><td colSpan={9} className="py-12 text-center text-xs text-gray-500">No staff found.</td></tr>
                 ) : (
                   visible.map(r => (
                     <tr key={r.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setSelected(r)} title="View breakdown">
@@ -193,7 +201,10 @@ const StaffPayrollPage: React.FC = () => {
                         {r.leave > 0 && <span className="text-[10px] text-gray-400"> ({r.leave} leave)</span>}
                       </td>
                       <td className="px-3 py-2 text-xs text-right text-gray-900 whitespace-nowrap">{formatKES(r.gross_pay)}</td>
-                      <td className="px-3 py-2 text-xs text-right text-red-600 whitespace-nowrap">{formatKES(r.total_deductions)}</td>
+                      <td className="px-3 py-2 text-xs text-right text-red-600 whitespace-nowrap">{formatKES(otherDeductions(r))}</td>
+                      <td className="px-3 py-2 text-xs text-right text-amber-600 whitespace-nowrap">
+                        {r.advance_recovery ? formatKES(r.advance_recovery) : <span className="text-gray-400">—</span>}
+                      </td>
                       <td className="px-3 py-2 text-xs text-right font-semibold text-green-700 whitespace-nowrap">{formatKES(r.net_pay)}</td>
                       <td className="px-3 py-2 text-center whitespace-nowrap">
                         {r.already_paid ? (
@@ -227,12 +238,15 @@ const StaffPayrollPage: React.FC = () => {
               <div className="flex justify-between"><span className="text-gray-600">Approved leave days</span><span>{selected.leave}</span></div>
               <div className="flex justify-between"><span className="text-gray-600">Days paid / working days</span><span>{selected.daysPaid} / {selected.working_days}</span></div>
               <div className="flex justify-between font-medium border-t pt-1.5"><span>Gross pay</span><span>{formatKES(selected.gross_pay)}</span></div>
-              {selected.deductions.length === 0 ? (
+              {selected.deductions.length === 0 && !selected.advance_recovery ? (
                 <div className="text-gray-400">No deductions</div>
               ) : (
                 selected.deductions.map(d => (
                   <div key={d.id} className="flex justify-between"><span className="text-gray-600">{d.name}</span><span className="text-red-600">- {formatKES(d.amount)}</span></div>
                 ))
+              )}
+              {!!selected.advance_recovery && (
+                <div className="flex justify-between"><span className="text-gray-600">Salary advance recovery</span><span className="text-red-600">- {formatKES(selected.advance_recovery)}</span></div>
               )}
               <div className="flex justify-between font-medium border-t pt-1.5"><span>Total deductions</span><span className="text-red-600">- {formatKES(selected.total_deductions)}</span></div>
               <div className="flex justify-between text-sm font-semibold border-t pt-1.5"><span>Net pay</span><span className="text-green-700">{formatKES(selected.net_pay)}</span></div>

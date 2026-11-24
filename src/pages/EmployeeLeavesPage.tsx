@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
+import PostLeaveModal from '../components/PostLeaveModal';
 
 interface LeaveRequest {
   id: number;
@@ -10,6 +11,7 @@ interface LeaveRequest {
   status: string;
   reason: string;
   attachment_url?: string;
+  is_unpaid?: number | boolean;
 }
 
 // Icons
@@ -71,21 +73,24 @@ const EmployeeLeavesPage: React.FC = () => {
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [showPostModal, setShowPostModal] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const fetchLeaveRequests = async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
+    setError(null);
+    try {
+      const response = await api.get('/leave-requests/employee-leaves');
+      setLeaveRequests(response.data);
+      setFilteredRequests(response.data);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch leave requests');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchLeaveRequests = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await api.get('/leave-requests/employee-leaves');
-        setLeaveRequests(response.data);
-        setFilteredRequests(response.data);
-      } catch (err: any) {
-        setError(err.message || 'Failed to fetch leave requests');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchLeaveRequests();
   }, []);
 
@@ -180,7 +185,7 @@ const EmployeeLeavesPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-4">
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600 mx-auto"></div>
@@ -195,7 +200,7 @@ const EmployeeLeavesPage: React.FC = () => {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-4">
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-center py-8">
               <p className="text-sm font-medium text-red-600">{error}</p>
@@ -216,7 +221,7 @@ const EmployeeLeavesPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8">
           <div className="py-3">
             <div className="flex items-center justify-between">
               <div>
@@ -225,19 +230,33 @@ const EmployeeLeavesPage: React.FC = () => {
                   Manage and review employee leave requests
                 </p>
               </div>
-              <button
-                onClick={() => window.location.reload()}
-                className="inline-flex items-center px-2.5 py-1 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                <Icons.Refresh className="mr-1.5" />
-                Refresh
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.location.reload()}
+                  className="inline-flex items-center px-2.5 py-1 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  <Icons.Refresh className="mr-1.5" />
+                  Refresh
+                </button>
+                <button
+                  onClick={() => { setNotice(null); setShowPostModal(true); }}
+                  className="inline-flex items-center px-2.5 py-1 text-xs font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  + Post Leave
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-4">
+        {notice && (
+          <div className="mb-4 flex items-start justify-between gap-3 px-3 py-2 text-xs rounded-lg border bg-green-50 text-green-800 border-green-200">
+            <span>{notice}</span>
+            <button onClick={() => setNotice(null)} aria-label="Dismiss">×</button>
+          </div>
+        )}
         {/* Search and Filters */}
         <div className="bg-white rounded-lg shadow mb-4">
           <div className="px-4 py-3 border-b border-gray-200">
@@ -390,6 +409,11 @@ const EmployeeLeavesPage: React.FC = () => {
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <span className="text-[10px] text-gray-900">{req.leave_type}</span>
+                        {Number(req.is_unpaid) === 1 && (
+                          <span className="ml-1.5 inline-flex px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-100 text-amber-800" title="Not paid in payroll">
+                            Unpaid
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2 whitespace-nowrap">
                         <div className="text-[10px] text-gray-900">
@@ -424,10 +448,16 @@ const EmployeeLeavesPage: React.FC = () => {
                       )}
                     </td>
                       <td className="px-3 py-2 whitespace-nowrap">
+                        {String(req.status) === '1' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-800 border border-green-200">
+                            <Icons.Check />
+                            <span className="ml-1">Approved</span>
+                          </span>
+                        ) : (
                         <div className="flex space-x-1">
                       <button
                             className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            disabled={req.status === '1' || updatingId === req.id}
+                            disabled={updatingId === req.id}
                         onClick={() => handleUpdateStatus(req.id, 1)}
                       >
                             {updatingId === req.id ? (
@@ -439,7 +469,7 @@ const EmployeeLeavesPage: React.FC = () => {
                       </button>
                       <button
                             className="inline-flex items-center px-2 py-0.5 text-[10px] font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            disabled={req.status === '2' || updatingId === req.id}
+                            disabled={String(req.status) === '2' || updatingId === req.id}
                         onClick={() => handleUpdateStatus(req.id, 2)}
                       >
                             {updatingId === req.id ? (
@@ -450,6 +480,7 @@ const EmployeeLeavesPage: React.FC = () => {
                         Decline
                       </button>
                         </div>
+                        )}
                     </td>
                   </tr>
                   ))}
@@ -547,6 +578,12 @@ const EmployeeLeavesPage: React.FC = () => {
         </div>
       )}
       </div>
+
+      <PostLeaveModal
+        open={showPostModal}
+        onClose={() => setShowPostModal(false)}
+        onPosted={(msg) => { setNotice(msg); fetchLeaveRequests(false); }}
+      />
     </div>
   );
 };

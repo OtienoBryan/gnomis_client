@@ -13,11 +13,13 @@ import {
 import api from '../services/api';
 
 interface PublicHoliday {
-  id: number;
+  id: number | string;
   name: string;
   date: string;
   country: string;
   is_recurring: boolean;
+  // true when this occurrence is carried forward from a recurring holiday of an earlier year
+  is_projected?: boolean;
 }
 
 const PublicHolidaysPage: React.FC = () => {
@@ -39,7 +41,7 @@ const PublicHolidaysPage: React.FC = () => {
     name: '',
     date: '',
     country: 'Kenya',
-    is_recurring: false
+    is_recurring: true
   });
 
   // Fetch holidays
@@ -88,7 +90,7 @@ const PublicHolidaysPage: React.FC = () => {
       name: '',
       date: '',
       country: 'Kenya',
-      is_recurring: false
+      is_recurring: true
     });
     setIsModalOpen(true);
   };
@@ -118,7 +120,10 @@ const PublicHolidaysPage: React.FC = () => {
     }
 
     try {
-      if (editingHoliday) {
+      if (editingHoliday?.is_projected) {
+        // Editing a carried-forward occurrence saves it as this year's own entry
+        await api.post('/public-holidays', formData);
+      } else if (editingHoliday) {
         // Update existing holiday
         await api.put(`/public-holidays/${editingHoliday.id}`, formData);
       } else {
@@ -135,7 +140,7 @@ const PublicHolidaysPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: number | string) => {
     if (!window.confirm('Are you sure you want to delete this holiday?')) {
       return;
     }
@@ -290,7 +295,7 @@ const PublicHolidaysPage: React.FC = () => {
                     filteredHolidays.map(holiday => (
                       <tr key={holiday.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
-                          {new Date(holiday.date).toLocaleDateString('en-US', {
+                          {new Date(holiday.date.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-US', {
                             year: 'numeric',
                             month: 'short',
                             day: 'numeric'
@@ -306,8 +311,11 @@ const PublicHolidaysPage: React.FC = () => {
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap">
                           {holiday.is_recurring ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-medium bg-green-100 text-green-800">
-                              Yes
+                            <span
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-medium bg-green-100 text-green-800"
+                              title={holiday.is_projected ? 'Carried forward from a previous year. Edit to change it for this year onward.' : undefined}
+                            >
+                              {holiday.is_projected ? 'Yes (auto)' : 'Yes'}
                             </span>
                           ) : (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-medium bg-gray-100 text-gray-800">
@@ -324,13 +332,15 @@ const PublicHolidaysPage: React.FC = () => {
                             >
                               <Edit className="h-3.5 w-3.5" />
                             </button>
-                            <button
-                              onClick={() => handleDelete(holiday.id)}
-                              className="text-red-600 hover:text-red-800 transition-colors"
-                              title="Delete"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            {!holiday.is_projected && (
+                              <button
+                                onClick={() => handleDelete(holiday.id)}
+                                className="text-red-600 hover:text-red-800 transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -348,9 +358,16 @@ const PublicHolidaysPage: React.FC = () => {
             <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
               <div className="p-4 border-b border-gray-200">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-gray-900">
-                    {editingHoliday ? 'Edit Holiday' : 'Add New Holiday'}
-                  </h3>
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">
+                      {editingHoliday ? 'Edit Holiday' : 'Add New Holiday'}
+                    </h3>
+                    {editingHoliday?.is_projected && (
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        Saving creates this year's own entry; it will apply from {editingHoliday.date.slice(0, 4)} onward.
+                      </p>
+                    )}
+                  </div>
                   <button
                     onClick={closeModal}
                     className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -411,7 +428,7 @@ const PublicHolidaysPage: React.FC = () => {
                       onChange={e => setFormData({ ...formData, is_recurring: e.target.checked })}
                     />
                     <label htmlFor="is_recurring" className="ml-2 text-[10px] text-gray-700">
-                      Recurring holiday (same date every year)
+                      Recurring holiday (repeats on the same date every year until edited)
                     </label>
                   </div>
                 </div>

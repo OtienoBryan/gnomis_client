@@ -1,18 +1,103 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, AlertCircle, ChevronDown, Search } from 'lucide-react';
 import { payrollApi, AccountGroups, Account, StatutoryRule, PayrollSettings } from '../services/payrollService';
 
 const select = 'w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-red-500';
 
 type RuleLinks = Record<number, { account_id: string; employer_account_id: string }>;
 
-const AccountSelect: React.FC<{ value: string; onChange: (v: string) => void; list: Account[]; missing?: boolean }> = ({ value, onChange, list, missing }) => (
-  <select value={value} onChange={(e) => onChange(e.target.value)} className={`${select} ${missing ? 'border-red-300 bg-red-50' : ''}`}>
-    <option value="">— not linked —</option>
-    {list.map((a) => <option key={a.id} value={a.id}>{a.account_code} - {a.account_name}</option>)}
-  </select>
-);
+const accountLabel = (a: Account) => `${a.account_code} - ${a.account_name}`;
+
+// Searchable account picker: type to filter by code or name, Enter picks the highlighted match
+const AccountSelect: React.FC<{ value: string; onChange: (v: string) => void; list: Account[]; missing?: boolean }> = ({ value, onChange, list, missing }) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState(0);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  const selected = list.find((a) => String(a.id) === value);
+  const options = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? list.filter((a) => accountLabel(a).toLowerCase().includes(q)) : list;
+  }, [list, query]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
+
+  useEffect(() => { setActive(0); }, [query]);
+  useEffect(() => {
+    listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [active]);
+
+  const pick = (v: string) => { onChange(v); setOpen(false); setQuery(''); };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, options.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (options[active]) pick(String(options[active].id)); }
+    else if (e.key === 'Escape') { setOpen(false); setQuery(''); }
+  };
+
+  return (
+    <div ref={boxRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`${select} flex items-center justify-between gap-2 text-left bg-white ${missing ? 'border-red-300 bg-red-50' : ''}`}
+      >
+        <span className={`truncate ${selected ? 'text-gray-900' : 'text-gray-500'}`}>{selected ? accountLabel(selected) : '— not linked —'}</span>
+        <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 w-full min-w-[16rem] bg-white border border-gray-200 rounded-md shadow-lg">
+          <div className="relative p-1.5 border-b border-gray-100">
+            <Search className="w-3 h-3 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={onKeyDown}
+              placeholder="Search by code or name…"
+              className="w-full pl-6 pr-2 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-red-500"
+            />
+          </div>
+          <ul ref={listRef} className="max-h-60 overflow-y-auto py-1 text-xs">
+            {!query && (
+              <li>
+                <button type="button" onClick={() => pick('')} className={`w-full text-left px-3 py-1.5 hover:bg-gray-50 ${!value ? 'font-medium text-red-700' : 'text-gray-500'}`}>
+                  — not linked —
+                </button>
+              </li>
+            )}
+            {options.length === 0 ? (
+              <li className="px-3 py-2 text-gray-400">No accounts match “{query}”</li>
+            ) : (
+              options.map((a, i) => (
+                <li key={a.id}>
+                  <button
+                    type="button"
+                    data-index={i}
+                    onMouseEnter={() => setActive(i)}
+                    onClick={() => pick(String(a.id))}
+                    className={`w-full text-left px-3 py-1.5 ${i === active ? 'bg-red-50' : ''} ${String(a.id) === value ? 'font-medium text-red-700' : 'text-gray-800'}`}
+                  >
+                    <span className="text-gray-500">{a.account_code}</span> - {a.account_name}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Status: React.FC<{ ok: boolean; optional?: boolean }> = ({ ok, optional }) =>
   ok ? <CheckCircle2 className="w-4 h-4 text-green-600" />

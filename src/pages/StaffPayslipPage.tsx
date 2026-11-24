@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Printer } from 'lucide-react';
+import { ArrowLeft, Mail, Printer } from 'lucide-react';
 import { API_CONFIG } from '../config/api';
 import { formatKES } from '../utils/salesRepPayroll';
 
@@ -57,6 +57,27 @@ const StaffPayslipPage: React.FC = () => {
   const [slip, setSlip] = useState<Payslip | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [emailNotice, setEmailNotice] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const emailPayslip = async () => {
+    if (!slip) return;
+    if (!slip.staff_email) {
+      setEmailNotice({ ok: false, text: 'This employee has no personal email. Add it under Edit Staff > Personal Email.' });
+      return;
+    }
+    if (!window.confirm(`Email this payslip as a PDF to ${slip.staff_email}?`)) return;
+    setSending(true);
+    setEmailNotice(null);
+    try {
+      await axios.post(`${PAYROLL_API_BASE}/staff-pay/history/${slip.id}/email`, {}, { headers: getAuthHeaders() });
+      setEmailNotice({ ok: true, text: `Payslip sent to ${slip.staff_email}.` });
+    } catch (err: any) {
+      setEmailNotice({ ok: false, text: err.response?.data?.error || err.message || 'Failed to send payslip' });
+    } finally {
+      setSending(false);
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -78,11 +99,21 @@ const StaffPayslipPage: React.FC = () => {
             <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back to Payroll History
           </Link>
           {slip && (
-            <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
-              <Printer className="w-3.5 h-3.5" /> Print
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={emailPayslip} disabled={sending} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
+                <Mail className="w-3.5 h-3.5" /> {sending ? 'Sending…' : 'Email payslip'}
+              </button>
+              <button onClick={() => window.print()} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
+                <Printer className="w-3.5 h-3.5" /> Print
+              </button>
+            </div>
           )}
         </div>
+        {emailNotice && (
+          <div className={`mb-3 px-3 py-2 text-xs rounded-md border print:hidden ${emailNotice.ok ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+            {emailNotice.text}
+          </div>
+        )}
 
         {loading ? (
           <div className="py-20 text-center text-sm text-gray-500">Loading payslip…</div>

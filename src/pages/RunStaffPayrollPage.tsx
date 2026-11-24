@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, PlayCircle, Search } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Mail, PlayCircle, Search } from 'lucide-react';
 import { API_CONFIG } from '../config/api';
 import { Account, formatKES, getDaysInMonth, toLocalISODate } from '../utils/salesRepPayroll';
 import type { StaffPayrollRow } from './StaffPayrollPage';
@@ -16,6 +16,9 @@ const getAuthHeaders = () => {
 const field =
   'w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500';
 const label = 'block text-[10px] font-medium text-gray-700 mb-1';
+
+interface EmailPerson { staff_id: number; name: string; payslip_id: number; email?: string; error?: string }
+interface EmailSummary { sent: EmailPerson[]; failed: EmailPerson[]; no_email: EmailPerson[] }
 
 const RunStaffPayrollPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -40,13 +43,14 @@ const RunStaffPayrollPage: React.FC = () => {
   const [paymentAccount, setPaymentAccount] = useState('');
   const [expenseAccount, setExpenseAccount] = useState('');
   const [notes, setNotes] = useState('');
+  const [sendPayslips, setSendPayslips] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [selectionTouched, setSelectionTouched] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
-  const [runResult, setRunResult] = useState<{ count: number; skipped: number } | null>(null);
+  const [runResult, setRunResult] = useState<{ count: number; skipped: number; emails: EmailSummary | null } | null>(null);
 
   // Accounts
   useEffect(() => {
@@ -126,10 +130,11 @@ const RunStaffPayrollPage: React.FC = () => {
           payment_account_id: Number(paymentAccount),
           expense_account_id: Number(expenseAccount),
           notes: notes || undefined,
+          send_payslips: sendPayslips,
         },
         { headers: getAuthHeaders() }
       );
-      if (res.data?.success) setRunResult({ count: res.data.count, skipped: res.data.skipped || 0 });
+      if (res.data?.success) setRunResult({ count: res.data.count, skipped: res.data.skipped || 0, emails: res.data.emails || null });
       else setRunError(res.data?.error || 'Failed to run payroll');
     } catch (err: any) {
       setRunError(err.response?.data?.error || err.message || 'Failed to run payroll');
@@ -163,6 +168,40 @@ const RunStaffPayrollPage: React.FC = () => {
             {runResult.count} journal {runResult.count === 1 ? 'entry' : 'entries'} recorded for {startDate} to {endDate}.
             {runResult.skipped > 0 && ` ${runResult.skipped} staff skipped (already paid for this period).`}
           </p>
+          {runResult.emails && (
+            <div className="mt-4 text-left text-xs border border-gray-200 rounded-md p-3 space-y-1.5">
+              <div className="flex items-center gap-1.5 font-semibold text-gray-900">
+                <Mail className="h-3.5 w-3.5" /> Payslip emails
+              </div>
+              <p className="text-green-700">{runResult.emails.sent.length} sent to personal email</p>
+              {runResult.emails.no_email.length > 0 && (
+                <div className="text-amber-700">
+                  {runResult.emails.no_email.length} not sent (no personal email on staff record):{' '}
+                  {runResult.emails.no_email.map((p, i) => (
+                    <span key={p.payslip_id}>
+                      {i > 0 && ', '}
+                      <Link to={`/payroll-management/payslip/${p.payslip_id}`} className="underline">{p.name}</Link>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {runResult.emails.failed.length > 0 && (
+                <div className="text-red-700">
+                  {runResult.emails.failed.length} failed:
+                  <ul className="list-disc ml-4">
+                    {runResult.emails.failed.map(p => (
+                      <li key={p.payslip_id}>
+                        <Link to={`/payroll-management/payslip/${p.payslip_id}`} className="underline">{p.name}</Link> ({p.email}): {p.error}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {(runResult.emails.no_email.length > 0 || runResult.emails.failed.length > 0) && (
+                <p className="text-gray-500">Add missing emails under Edit Staff &gt; Personal Email, then open the payslip and use "Email payslip" to send it.</p>
+              )}
+            </div>
+          )}
           <div className="flex justify-center gap-2 mt-5">
             <Link to="/payroll-management/history" className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200">View history</Link>
             <Link to="/payroll-management" className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded">Done</Link>
@@ -262,6 +301,13 @@ const RunStaffPayrollPage: React.FC = () => {
               <label className={label}>Notes (optional)</label>
               <textarea rows={2} className={`${field} resize-none`} value={notes} onChange={e => setNotes(e.target.value)} />
             </div>
+            <label className="flex items-start gap-2 text-xs text-gray-700 cursor-pointer">
+              <input type="checkbox" checked={sendPayslips} onChange={e => setSendPayslips(e.target.checked)} className="mt-0.5 rounded border-gray-300 text-green-600 focus:ring-green-500" />
+              <span>
+                Email payslips to staff
+                <span className="block text-[10px] text-gray-500">Each employee gets their payslip as a PDF at their personal email once payroll is posted.</span>
+              </span>
+            </label>
           </div>
 
           <div className="bg-white border border-gray-200 rounded-md p-4 space-y-2">

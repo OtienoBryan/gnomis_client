@@ -447,7 +447,8 @@ const PayrollManagementPage: React.FC = () => {
     { to: '/payroll-accounts', label: 'Account links' },
     { to: '/sales-rep-payroll', label: 'Sales rep payroll', icon: <UsersIcon className="h-3.5 w-3.5" /> },
     { to: '/sales-rep-deductions', label: 'Sales rep deductions', icon: <SlidersIcon className="h-3.5 w-3.5" /> },
-    { to: '/sales-rep-advances', label: 'Salary advances', icon: <WalletIcon className="h-3.5 w-3.5" /> },
+    { to: '/sales-rep-advances', label: 'Sales rep advances', icon: <WalletIcon className="h-3.5 w-3.5" /> },
+    { to: '/staff-advances', label: 'Staff advances', icon: <WalletIcon className="h-3.5 w-3.5" /> },
   ];
 
   return (

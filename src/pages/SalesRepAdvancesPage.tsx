@@ -61,9 +61,9 @@ const StatCard: React.FC<{ title: string; value: string; hint?: string; icon: Re
 
 const SalesRepAdvancesPage: React.FC = () => {
   const { user } = useAuth();
-  // Same roles the API allows: sales can approve/decline, but only finance-type roles can delete
+  // Same roles the API allows: sales and hr can approve/decline, but only finance-type roles can delete
   const canManage = ['admin', 'manager', 'accountant', 'executive', 'finance'].includes(user?.role || '');
-  const canReview = canManage || user?.role === 'sales';
+  const canReview = canManage || ['sales', 'hr'].includes(user?.role || '');
   const [reviewingId, setReviewingId] = useState<number | null>(null);
 
   const [reps, setReps] = useState<SalesRep[]>([]);

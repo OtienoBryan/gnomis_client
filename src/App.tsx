@@ -71,6 +71,7 @@ import SalesRepDeductionsPage from './pages/SalesRepDeductionsPage';
 import SalesRepPayrollHistoryPage from './pages/SalesRepPayrollHistoryPage';
 import SalesRepPayslipPage from './pages/SalesRepPayslipPage';
 import SalesRepAdvancesPage from './pages/SalesRepAdvancesPage';
+import StaffAdvancesPage from './pages/StaffAdvancesPage';
 import PayrollStatutoryPage from './pages/PayrollStatutoryPage';
 import PayrollStaffPage from './pages/PayrollStaffPage';
 import PayrollRunsPage from './pages/PayrollRunsPage';
@@ -767,6 +768,11 @@ const App = () => {
                 <SalesRepAdvancesPage />
               </RoleBasedRoute>
             } />
+            <Route path="/staff-advances" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance', 'hr']} fallbackPath="/sales-dashboard">
+                <StaffAdvancesPage />
+              </RoleBasedRoute>
+            } />
             <Route path="/sales-rep-deductions" element={
               <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'executive', 'sales', 'finance', 'hr']} fallbackPath="/sales-dashboard">
                 <SalesRepDeductionsPage />
@@ -922,7 +928,7 @@ const App = () => {
               </RoleBasedRoute>
             } />
             <Route path="/staff-location" element={
-              <RoleBasedRoute allowedRoles={['admin', 'manager', 'sales', 'executive', 'accountant', 'stock', 'finance']} fallbackPath="/sales-dashboard">
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'sales', 'executive', 'accountant', 'stock', 'finance', 'hr']} fallbackPath="/sales-dashboard">
                 <StaffLocationPage />
               </RoleBasedRoute>
             } />
