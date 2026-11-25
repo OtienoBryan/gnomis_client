@@ -10,7 +10,7 @@ import {
   BarChart3Icon, CalendarIcon, MapPinIcon, FileTextIcon,
   X, ChevronRightIcon, ClipboardListIcon, ActivityIcon,
   CheckCircle2Icon, AlertCircleIcon, ArrowUpRightIcon, PiggyBankIcon,
-  WalletIcon, SlidersIcon,
+  WalletIcon, SlidersIcon, TruckIcon,
 } from 'lucide-react';
 
 /* ──────────────────────────── StatCard ──────────────────────────── */
@@ -318,6 +318,8 @@ const SalesDashboardPage: React.FC = () => {
         { to: '/clients-list', label: 'Outlets', icon: <MapPinIcon className="h-4 w-4" />, color: 'bg-white text-pink-700 border-gray-300 hover:bg-pink-50' },
         { to: '/routes', label: 'Routes', icon: <MapPinIcon className="h-4 w-4" />, color: 'bg-white text-slate-700 border-gray-300 hover:bg-slate-50' },
         { to: '/dashboard/journey-plans', label: 'Route Plans', icon: <ActivityIcon className="h-4 w-4" />, color: 'bg-white text-amber-700 border-gray-300 hover:bg-amber-50' },
+        { to: '/vehicles', label: 'Vehicles', icon: <TruckIcon className="h-4 w-4" />, color: 'bg-white text-blue-700 border-gray-300 hover:bg-blue-50' },
+        { to: '/vehicle-fuelings', label: 'Vehicle Fueling', icon: <TruckIcon className="h-4 w-4" />, color: 'bg-white text-orange-700 border-gray-300 hover:bg-orange-50' },
        ],
     },
     {

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_CONFIG } from '../config/api';
-import { VEHICLE_MODELS } from '../constants/vehicleModels';
+import { fetchVehicleModels, type VehicleModel } from '../services/vehicleModels';
 
 const inputClass =
   'block w-full border border-gray-200 rounded-lg px-3 py-2 text-xs bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 disabled:bg-gray-50';
@@ -14,6 +14,18 @@ const AddVehiclePage: React.FC = () => {
   const [consumption, setConsumption] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [models, setModels] = useState<VehicleModel[]>([]);
+
+  useEffect(() => {
+    fetchVehicleModels().then(setModels);
+  }, []);
+
+  // Choosing a model fills in its standard consumption (still editable)
+  const chooseModel = (name: string) => {
+    setModel(name);
+    const m = models.find(x => x.name === name);
+    if (m?.consumption != null) setConsumption(String(m.consumption));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,12 +97,15 @@ const AddVehiclePage: React.FC = () => {
               <label className={labelClass}>
                 Vehicle Model <span className="text-red-500">*</span>
               </label>
-              <select className={inputClass} value={model} onChange={e => setModel(e.target.value)} disabled={saving}>
+              <select className={inputClass} value={model} onChange={e => chooseModel(e.target.value)} disabled={saving}>
                 <option value="">Select model</option>
-                {VEHICLE_MODELS.map(m => (
-                  <option key={m} value={m}>{m}</option>
+                {models.map(m => (
+                  <option key={m.name} value={m.name}>{m.name}</option>
                 ))}
               </select>
+              <p className="text-[10px] text-gray-400 mt-1">
+                Missing a model? Add it from <Link to="/vehicles" className="text-red-600 hover:underline">Vehicles → Manage Models</Link>.
+              </p>
             </div>
 
             <div>

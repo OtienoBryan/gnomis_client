@@ -47,6 +47,12 @@ const navigation = [
     roles: ['admin', 'manager', 'accountant', 'finance']
   },
   {
+    name: 'Vehicle Fueling',
+    href: '/vehicle-fuelings',
+    icon: TruckIcon,
+    roles: ['admin', 'manager', 'accountant', 'finance']
+  },
+  {
     name: 'Loading Sheet',
     href: '/loading-sheet',
     icon: TruckIcon,

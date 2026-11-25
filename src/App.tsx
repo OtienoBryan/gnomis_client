@@ -216,6 +216,7 @@ import UploadDocumentPage from './pages/UploadDocumentPage';
 import EmployeeDocumentsPage from './pages/EmployeeDocumentsPage';
 import RidersPage from './pages/RidersPage';
 import VehiclesPage from './pages/VehiclesPage';
+import VehicleFuelingsPage from './pages/VehicleFuelingsPage';
 import LoadingSheetPage from './pages/LoadingSheetPage';
 import UserLocationsPage from './pages/UserLocationsPage';
 import LoadingSheetHistoryPage from './pages/LoadingSheetHistoryPage';
@@ -888,12 +889,17 @@ const App = () => {
               </RoleBasedRoute>
             } />
             <Route path="/vehicles/new" element={
-              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'stock']} fallbackPath="/sales-dashboard">
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'stock', 'sales']} fallbackPath="/sales-dashboard">
                 <AddVehiclePage />
               </RoleBasedRoute>
             } />
+            <Route path="/vehicle-fuelings" element={
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'stock', 'sales']} fallbackPath="/sales-dashboard">
+                <VehicleFuelingsPage />
+              </RoleBasedRoute>
+            } />
             <Route path="/vehicles" element={
-              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'stock']} fallbackPath="/sales-dashboard">
+              <RoleBasedRoute allowedRoles={['admin', 'manager', 'accountant', 'stock', 'sales']} fallbackPath="/sales-dashboard">
                 <VehiclesPage />
               </RoleBasedRoute>
             } />
