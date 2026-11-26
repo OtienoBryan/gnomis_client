@@ -44,18 +44,15 @@ const numberToWords = (num: number): string => {
   return chunks.join(' ');
 };
 
-// Splits the order quantity into full bales (product's bale qty) plus loose pieces,
-// e.g. 125 with 24 per bale -> "5 bales, 5 pcs". Blank when the product has no bale qty.
+// Order quantity divided by the product's bale qty, in decimals when it isn't a whole number of bales,
+// e.g. 48 with 24 per bale -> "2 bales", 36 -> "1.5 bales", 12 -> "0.5 bales".
+// Blank when the product has no bale qty.
 const formatBales = (qty: number | string, perBale?: number | string | null): string => {
   const per = Number(perBale);
   const q = Number(qty);
   if (!per || per <= 0 || !isFinite(q)) return '-';
-  const bales = Math.floor(q / per + 1e-9);
-  const pieces = Math.round((q - bales * per) * 100) / 100;
-  const parts: string[] = [];
-  if (bales > 0) parts.push(`${bales} ${bales === 1 ? 'bale' : 'bales'}`);
-  if (pieces > 0) parts.push(`${pieces} ${pieces === 1 ? 'pc' : 'pcs'}`);
-  return parts.length ? parts.join(', ') : '0';
+  const bales = Math.round((q / per) * 100) / 100; // up to 2 decimals, trailing zeros dropped
+  return `${bales} ${bales === 1 ? 'bale' : 'bales'}`;
 };
 
 const InvoiceViewPage: React.FC = () => {
