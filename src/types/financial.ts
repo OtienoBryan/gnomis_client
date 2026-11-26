@@ -162,6 +162,9 @@ export interface User {
     delivery_recipient_id_number?: string | null;
     delivered_at?: string | null;
     cancellation_comment?: string | null;
+    is_printed?: number | boolean | null;
+    printed_at?: string | null;
+    printed_by_name?: string | null;
     customer_balance?: string;
     received_by?: number;
     returned_at?: string;

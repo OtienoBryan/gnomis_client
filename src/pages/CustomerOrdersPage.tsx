@@ -134,6 +134,8 @@ const CustomerOrdersPage: React.FC = () => {
   // New filters: customer and outlet account
   const [customerFilter, setCustomerFilter] = useState<string>('');
   const [outletAccountFilter, setOutletAccountFilter] = useState<string>('');
+  const [printedFilter, setPrintedFilter] = useState<'' | '1' | '0'>('');
+  const [printingOrderId, setPrintingOrderId] = useState<number | null>(null);
   const [customers, setCustomers] = useState<Array<{ id: number; name: string }>>([]);
   const [outletAccounts, setOutletAccounts] = useState<Array<{ id: number; name: string }>>([]);
 
@@ -239,7 +241,11 @@ const CustomerOrdersPage: React.FC = () => {
       if (outletAccountFilter) {
         params.append('outlet_account_id', outletAccountFilter);
       }
-      
+
+      if (printedFilter) {
+        params.append('printed', printedFilter);
+      }
+
       // Single API call to get all needed data
       const response = await axios.get(`/api/customer-orders/data?${params.toString()}`);
       
@@ -261,7 +267,26 @@ const CustomerOrdersPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, limit, myStatusFilter, riderFilter, startDate, endDate, searchTerm, customerFilter, outletAccountFilter]);
+  }, [page, limit, myStatusFilter, riderFilter, startDate, endDate, searchTerm, customerFilter, outletAccountFilter, printedFilter]);
+
+  // Tick / untick "printed" on an approved order. Updates the row right away and undoes it if saving fails.
+  const handleTogglePrinted = async (order: SalesOrder, printed: boolean) => {
+    const orderId = Number(order.id);
+    setPrintingOrderId(orderId);
+    const apply = (patch: Partial<SalesOrder>) =>
+      setOrders((prev) => prev.map((o) => (Number(o.id) === orderId ? { ...o, ...patch } : o)));
+    const previous = { is_printed: order.is_printed, printed_at: order.printed_at, printed_by_name: order.printed_by_name };
+    apply({ is_printed: printed ? 1 : 0, printed_at: printed ? new Date().toISOString() : null, printed_by_name: printed ? user?.username || null : null });
+    try {
+      const res = await axios.patch(`/api/customer-orders/${orderId}/printed`, { printed });
+      apply(res.data?.data || {});
+    } catch (err: any) {
+      apply(previous);
+      setError(err.response?.data?.error || 'Failed to update printed status');
+    } finally {
+      setPrintingOrderId(null);
+    }
+  };
 
   const csvEscape = (value: any) => {
     const s = value == null ? '' : String(value);
@@ -1633,6 +1658,24 @@ const CustomerOrdersPage: React.FC = () => {
                   ))}
                 </select>
               </div>
+
+              <div className="w-full sm:w-40">
+                <label className="block text-[9px] font-medium text-gray-600 mb-0.5">
+                  Printed
+                </label>
+                <select
+                  value={printedFilter}
+                  onChange={(e) => {
+                    setPrintedFilter(e.target.value as '' | '1' | '0');
+                    setPage(1);
+                  }}
+                  className="w-full px-2 py-1.5 text-[10px] border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                >
+                  <option value="">All</option>
+                  <option value="1">Printed</option>
+                  <option value="0">Not printed</option>
+                </select>
+              </div>
             </div>
 
           </div>
@@ -1688,6 +1731,9 @@ const CustomerOrdersPage: React.FC = () => {
                     </th>
                     <th className="px-4 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">
                       Cancellation Reason
+                    </th>
+                    <th className="px-4 py-2 text-center text-[9px] font-medium text-gray-500 uppercase tracking-wider">
+                      Printed
                     </th>
                     <th className="px-4 py-2 text-left text-[9px] font-medium text-gray-500 uppercase tracking-wider">
                       Status
@@ -1781,6 +1827,33 @@ const CustomerOrdersPage: React.FC = () => {
                       </td>
                       <td className="px-4 py-2 text-[10px] text-gray-900 max-w-[14rem]">
                         {order.my_status === 5 ? (order.cancellation_comment || '—') : ''}
+                      </td>
+                      <td
+                        className="px-4 py-2 whitespace-nowrap text-center"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        {(order.my_status ?? 0) >= 1 && (order.my_status ?? 0) <= 4 ? (
+                          <label
+                            className="inline-flex flex-col items-center gap-0.5 cursor-pointer"
+                            title={order.is_printed ? `Printed${order.printed_by_name ? ` by ${order.printed_by_name}` : ''}${order.printed_at ? ` on ${String(order.printed_at).replace('T', ' ').slice(0, 16)}` : ''}` : 'Tick once this order has been printed'}
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-3.5 w-3.5 text-green-600 border-gray-300 rounded focus:ring-green-500 cursor-pointer disabled:opacity-50"
+                              checked={!!order.is_printed}
+                              disabled={printingOrderId === Number(order.id)}
+                              onChange={(e) => handleTogglePrinted(order, e.target.checked)}
+                            />
+                            <span className={`text-[9px] ${order.is_printed ? 'text-green-700 font-medium' : 'text-gray-400'}`}>
+                              {order.is_printed ? 'Printed' : 'Not printed'}
+                            </span>
+                          </label>
+                        ) : order.is_printed ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-medium bg-green-100 text-green-700">
+                            Printed
+                          </span>
+                        ) : null}
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap">
                         {getMyStatusBadge(order.my_status, order.status)}
